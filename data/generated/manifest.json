@@ -1,0 +1,68 @@
+{
+  "sourceDatabase": "BTG_PTV_Implementation.gdb",
+  "questionAreas": {
+    "questionAreas": 157,
+    "sourceBreakdown": {
+      "primary_gap": 149,
+      "comparison_gap": 8
+    },
+    "bounds": {
+      "minLng": -123.288083,
+      "minLat": 33.166698,
+      "maxLng": -77.599832,
+      "maxLat": 47.296572
+    }
+  },
+  "layers": {
+    "primary_parcels": {
+      "sourceLayer": "BTG_Spatial_Fix_Primary_Layer",
+      "featureCount": 3373,
+      "bounds": {
+        "minLng": -124.120011,
+        "minLat": 33.159127,
+        "maxLng": -73.553456,
+        "maxLat": 47.339119
+      }
+    },
+    "parcel_points": {
+      "sourceLayer": "BTG_Points_NoArches_12Feb26",
+      "featureCount": 3079,
+      "bounds": {
+        "minLng": -124.11448,
+        "minLat": 0.0,
+        "maxLng": 81.46548,
+        "maxLat": 90.0
+      }
+    },
+    "management_tracts": {
+      "sourceLayer": "BTG_MGMT_NoArches",
+      "featureCount": 896,
+      "bounds": {
+        "minLng": -124.120398,
+        "minLat": 33.159036,
+        "maxLng": -73.553456,
+        "maxLat": 47.338963
+      }
+    },
+    "tax_counties": {
+      "sourceLayer": "TaxParcels_CountySplits_Combined",
+      "featureCount": 99,
+      "bounds": {
+        "minLng": -124.131062,
+        "minLat": 33.153956,
+        "maxLng": -73.543526,
+        "maxLat": 47.342668
+      }
+    },
+    "management_counties": {
+      "sourceLayer": "Management_CountySplits_Combined",
+      "featureCount": 87,
+      "bounds": {
+        "minLng": -124.120398,
+        "minLat": 33.159036,
+        "maxLng": -73.553456,
+        "maxLat": 47.338963
+      }
+    }
+  }
+}

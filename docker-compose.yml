@@ -1,0 +1,56 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-qaviewer}
+      POSTGRES_USER: ${POSTGRES_USER:-qaviewer}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-qaviewer}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - db
+    environment:
+      DATABASE_URL: ${DATABASE_URL:-postgres://qaviewer:qaviewer@db:5432/qaviewer}
+      JWT_SECRET: ${JWT_SECRET:-change-me}
+      API_PORT: 3001
+      FRONTEND_ORIGIN: http://localhost:5173
+    working_dir: /workspace/backend
+    command: npm run dev
+    ports:
+      - "3001:3001"
+    volumes:
+      - ./backend:/workspace/backend
+      - ./data/generated:/workspace/data/generated:ro
+      - ./backend/uploads:/workspace/backend/uploads
+      - backend_node_modules:/workspace/backend/node_modules
+
+  web:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      VITE_API_BASE_URL: http://localhost:3001/api
+    working_dir: /workspace/frontend
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/workspace/frontend
+      - frontend_node_modules:/workspace/frontend/node_modules
+
+volumes:
+  pgdata:
+  backend_node_modules:
+  frontend_node_modules:

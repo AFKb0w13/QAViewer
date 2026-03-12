@@ -1,0 +1,11 @@
+.git
+.gitignore
+.venv
+BTG_PTV_Implementation.gdb
+backend/node_modules
+frontend/node_modules
+backend/dist
+frontend/dist
+backend/uploads/*
+!backend/uploads/.gitkeep
+question_area_review_web_app_prd.md:Zone.Identifier
