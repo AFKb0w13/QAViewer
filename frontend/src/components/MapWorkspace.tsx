@@ -261,7 +261,8 @@ export function MapWorkspace({ session, onLogout }: MapWorkspaceProps) {
     return () => {
       alive = false;
     };
-  }, [mapBbox, searchFilter, selectedCode, session.token, statusFilter]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedCode intentionally excluded to avoid redundant refetch on selection
+  }, [mapBbox, searchFilter, session.token, statusFilter]);
 
   useEffect(() => {
     const visibleLayers = (Object.keys(layerVisibility) as LayerKey[]).filter(
@@ -910,6 +911,7 @@ function MapViewportWatcher({ onChange }: { onChange: (bbox: string) => void }) 
 
 function MapFocus({ detail }: { detail: QuestionAreaDetail | null }) {
   const map = useMap();
+  const code = detail?.code ?? null;
 
   useEffect(() => {
     if (!detail) {
@@ -920,7 +922,8 @@ function MapFocus({ detail }: { detail: QuestionAreaDetail | null }) {
     if (bounds.isValid()) {
       map.fitBounds(bounds.pad(0.35));
     }
-  }, [detail, map]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-center when a different QA is selected
+  }, [code, map]);
 
   return null;
 }

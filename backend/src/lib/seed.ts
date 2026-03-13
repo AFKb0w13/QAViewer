@@ -28,16 +28,39 @@ const DEMO_USERS = [
   },
 ];
 
+const SEED_TABLES = [
+  "question_areas",
+  "parcel_features",
+  "parcel_points",
+  "management_tracts",
+  "county_boundaries",
+] as const;
+
+async function tableCounts(client: PoolClient): Promise<Record<string, number>> {
+  const result = await client.query<{ tbl: string; count: string }>(`
+    SELECT tbl, count FROM (
+      SELECT 'question_areas' AS tbl, COUNT(*)::text AS count FROM question_areas
+      UNION ALL
+      SELECT 'parcel_features', COUNT(*)::text FROM parcel_features
+      UNION ALL
+      SELECT 'parcel_points', COUNT(*)::text FROM parcel_points
+      UNION ALL
+      SELECT 'management_tracts', COUNT(*)::text FROM management_tracts
+      UNION ALL
+      SELECT 'county_boundaries', COUNT(*)::text FROM county_boundaries
+    ) sub
+  `);
+  return Object.fromEntries(result.rows.map((r) => [r.tbl, Number(r.count)]));
+}
+
 export async function ensureSeedData(client: PoolClient): Promise<void> {
   await fs.mkdir(config.uploadsDir, { recursive: true });
 
   await seedUsers(client);
 
-  const existingCount = await client.query<{ count: string }>(
-    `SELECT COUNT(*)::text AS count FROM question_areas`,
-  );
-
-  if (Number(existingCount.rows[0]?.count ?? 0) > 0) {
+  const counts = await tableCounts(client);
+  const allPopulated = SEED_TABLES.every((t) => (counts[t] ?? 0) > 0);
+  if (allPopulated) {
     return;
   }
 
@@ -48,44 +71,54 @@ export async function ensureSeedData(client: PoolClient): Promise<void> {
   const taxCounties = await loadFeatureCollection("tax_counties.geojson");
   const managementCounties = await loadFeatureCollection("management_counties.geojson");
 
-  for (const feature of questionAreas.features) {
-    await insertQuestionArea(client, feature);
+  if ((counts["question_areas"] ?? 0) === 0) {
+    for (const feature of questionAreas.features) {
+      await insertQuestionArea(client, feature);
+    }
   }
 
-  for (const feature of parcelFeatures.features) {
-    await insertParcelFeature(client, feature);
+  if ((counts["parcel_features"] ?? 0) === 0) {
+    for (const feature of parcelFeatures.features) {
+      await insertParcelFeature(client, feature);
+    }
   }
 
-  for (const feature of parcelPoints.features) {
-    await insertParcelPoint(client, feature);
+  if ((counts["parcel_points"] ?? 0) === 0) {
+    for (const feature of parcelPoints.features) {
+      await insertParcelPoint(client, feature);
+    }
   }
 
-  for (const feature of managementTracts.features) {
-    await insertManagementTract(client, feature);
+  if ((counts["management_tracts"] ?? 0) === 0) {
+    for (const feature of managementTracts.features) {
+      await insertManagementTract(client, feature);
+    }
   }
 
-  for (const feature of taxCounties.features) {
-    await insertCountyBoundary(client, feature, "tax_counties");
-  }
-
-  for (const feature of managementCounties.features) {
-    await insertCountyBoundary(client, feature, "management_counties");
+  if ((counts["county_boundaries"] ?? 0) === 0) {
+    for (const feature of taxCounties.features) {
+      await insertCountyBoundary(client, feature, "tax_counties");
+    }
+    for (const feature of managementCounties.features) {
+      await insertCountyBoundary(client, feature, "management_counties");
+    }
   }
 
   await seedComments(client);
 }
 
 async function seedUsers(client: PoolClient): Promise<void> {
+  if (!config.demoMode) {
+    return;
+  }
+
   for (const user of DEMO_USERS) {
     const passwordHash = await hashPassword(user.password);
     await client.query(
       `
         INSERT INTO users (name, email, password_hash, role)
         VALUES ($1, $2, $3, $4)
-        ON CONFLICT (email) DO UPDATE
-        SET name = EXCLUDED.name,
-            password_hash = EXCLUDED.password_hash,
-            role = EXCLUDED.role
+        ON CONFLICT (email) DO NOTHING
       `,
       [user.name, user.email, passwordHash, user.role],
     );

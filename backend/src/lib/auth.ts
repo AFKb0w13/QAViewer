@@ -4,11 +4,13 @@ import jwt from "jsonwebtoken";
 
 import { config } from "../config.js";
 
+export type Role = "admin" | "reviewer" | "client";
+
 export type AuthUser = {
   id: number;
   email: string;
   name: string;
-  role: string;
+  role: Role;
 };
 
 type TokenPayload = AuthUser;
@@ -41,4 +43,19 @@ export function authenticateRequest(req: Request, res: Response, next: NextFunct
   } catch {
     res.status(401).json({ message: "Invalid or expired token." });
   }
+}
+
+export function requireRole(...allowed: Role[]) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const user = req.user;
+    if (!user) {
+      res.status(401).json({ message: "Not authenticated." });
+      return;
+    }
+    if (!allowed.includes(user.role as Role)) {
+      res.status(403).json({ message: "Insufficient permissions." });
+      return;
+    }
+    next();
+  };
 }

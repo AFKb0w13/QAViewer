@@ -2,6 +2,7 @@ import type { PoolClient } from "pg";
 
 export async function ensureSchema(client: PoolClient): Promise<void> {
   await client.query(`CREATE EXTENSION IF NOT EXISTS postgis`);
+  await client.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
 
   await client.query(`
     CREATE TABLE IF NOT EXISTS users (
@@ -9,7 +10,7 @@ export async function ensureSchema(client: PoolClient): Promise<void> {
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT NOT NULL,
-      role TEXT NOT NULL,
+      role TEXT NOT NULL CHECK (role IN ('admin', 'reviewer', 'client')),
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
@@ -20,8 +21,8 @@ export async function ensureSchema(client: PoolClient): Promise<void> {
       code TEXT NOT NULL UNIQUE,
       source_layer TEXT NOT NULL,
       source_group TEXT NOT NULL,
-      status TEXT NOT NULL,
-      severity TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('review', 'active', 'resolved', 'hold')),
+      severity TEXT NOT NULL CHECK (severity IN ('high', 'medium', 'low')),
       title TEXT NOT NULL,
       summary TEXT NOT NULL,
       description TEXT,
@@ -143,5 +144,15 @@ export async function ensureSchema(client: PoolClient): Promise<void> {
     CREATE INDEX IF NOT EXISTS parcel_points_geom_idx ON parcel_points USING GIST (geom);
     CREATE INDEX IF NOT EXISTS management_tracts_geom_idx ON management_tracts USING GIST (geom);
     CREATE INDEX IF NOT EXISTS county_boundaries_geom_idx ON county_boundaries USING GIST (geom);
+
+    CREATE INDEX IF NOT EXISTS question_areas_status_idx ON question_areas (status);
+    CREATE INDEX IF NOT EXISTS question_areas_severity_idx ON question_areas (severity);
+
+    CREATE INDEX IF NOT EXISTS comments_question_area_id_idx ON comments (question_area_id);
+    CREATE INDEX IF NOT EXISTS documents_question_area_id_idx ON documents (question_area_id);
+
+    CREATE INDEX IF NOT EXISTS question_areas_code_trgm_idx ON question_areas USING GIN (code gin_trgm_ops);
+    CREATE INDEX IF NOT EXISTS question_areas_title_trgm_idx ON question_areas USING GIN (title gin_trgm_ops);
+    CREATE INDEX IF NOT EXISTS question_areas_search_keywords_trgm_idx ON question_areas USING GIN (search_keywords gin_trgm_ops);
   `);
 }

@@ -20,7 +20,8 @@ services:
       - db
     environment:
       DATABASE_URL: ${DATABASE_URL:-postgres://qaviewer:qaviewer@db:5432/qaviewer}
-      JWT_SECRET: ${JWT_SECRET:-change-me}
+      JWT_SECRET: ${JWT_SECRET:-local-dev-secret-do-not-use-in-production}
+      DEMO_MODE: ${DEMO_MODE:-true}
       API_PORT: 3001
       FRONTEND_ORIGIN: http://localhost:5173
     working_dir: /workspace/backend

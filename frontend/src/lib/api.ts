@@ -1,4 +1,5 @@
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001/api";
+const STORAGE_KEY = "qaviewer.session";
 
 type RequestOptions = {
   method?: string;
@@ -6,6 +7,12 @@ type RequestOptions = {
   body?: unknown;
   formData?: FormData;
 };
+
+function handleUnauthorized(): never {
+  window.localStorage.removeItem(STORAGE_KEY);
+  window.location.reload();
+  throw new Error("Session expired. Please sign in again.");
+}
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const headers = new Headers();
@@ -22,6 +29,10 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
     body: options.formData ?? (options.body ? JSON.stringify(options.body) : undefined),
   });
 
+  if (response.status === 401) {
+    handleUnauthorized();
+  }
+
   if (!response.ok) {
     const payload = await response.json().catch(() => ({ message: "Request failed." }));
     throw new Error(payload.message ?? "Request failed.");
@@ -36,6 +47,10 @@ export async function apiDownload(path: string, token: string): Promise<Blob> {
       Authorization: `Bearer ${token}`,
     },
   });
+
+  if (response.status === 401) {
+    handleUnauthorized();
+  }
 
   if (!response.ok) {
     throw new Error("Download failed.");

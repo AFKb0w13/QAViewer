@@ -15,11 +15,28 @@ OUTPUT_DIR = ROOT / "data" / "generated"
 
 def read_layer(layer_name: str, columns: list[str] | None = None) -> gpd.GeoDataFrame:
     frame = gpd.read_file(GDB_PATH, layer=layer_name, columns=columns)
+
     if frame.crs is None:
-        frame = frame.set_crs(4326)
-    elif frame.crs.to_epsg() != 4326:
+        raise ValueError(
+            f"Layer '{layer_name}' has no CRS defined. "
+            "Cannot safely assume EPSG:4326. Fix the source data or set the CRS explicitly."
+        )
+
+    source_epsg = frame.crs.to_epsg()
+    print(f"  [{layer_name}] source CRS: EPSG:{source_epsg}")
+
+    if source_epsg != 4326:
         frame = frame.to_crs(4326)
-    return frame.loc[frame.geometry.notna() & ~frame.geometry.is_empty].copy()
+
+    frame = frame.loc[frame.geometry.notna() & ~frame.geometry.is_empty].copy()
+
+    invalid_mask = ~frame.geometry.is_valid
+    invalid_count = invalid_mask.sum()
+    if invalid_count > 0:
+        print(f"  [{layer_name}] repairing {invalid_count} invalid geometries with make_valid")
+        frame.loc[invalid_mask, "geometry"] = frame.loc[invalid_mask, "geometry"].make_valid()
+
+    return frame
 
 
 def clean_value(value: Any) -> Any:

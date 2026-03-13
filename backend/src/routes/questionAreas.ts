@@ -6,10 +6,36 @@ import multer from "multer";
 import { z } from "zod";
 
 import { config } from "../config.js";
+import { requireRole } from "../lib/auth.js";
 import { query } from "../lib/db.js";
 import { featureCollection, parseBbox } from "../lib/utils.js";
 
 const router = Router();
+
+const ALLOWED_MIME_TYPES = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/tiff",
+  "image/gif",
+  "image/webp",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.ms-excel",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "text/plain",
+  "text/csv",
+  "application/zip",
+  "application/geopackage+sqlite3",
+  "application/geo+json",
+  "application/json",
+]);
+
+const ALLOWED_EXTENSIONS = new Set([
+  ".pdf", ".jpg", ".jpeg", ".png", ".tif", ".tiff", ".gif", ".webp",
+  ".doc", ".docx", ".xls", ".xlsx", ".txt", ".csv", ".zip",
+  ".gpkg", ".geojson", ".json",
+]);
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -17,17 +43,27 @@ const upload = multer({
       callback(null, config.uploadsDir);
     },
     filename: (_req, file, callback) => {
-      const extension = path.extname(file.originalname);
+      const extension = path.extname(file.originalname).toLowerCase();
       callback(null, `${Date.now()}-${Math.random().toString(36).slice(2)}${extension}`);
     },
   }),
   limits: {
     fileSize: 25 * 1024 * 1024,
   },
+  fileFilter: (_req, file, callback) => {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (!ALLOWED_EXTENSIONS.has(ext) || !ALLOWED_MIME_TYPES.has(file.mimetype)) {
+      callback(new Error(`File type not allowed: ${ext} (${file.mimetype})`));
+      return;
+    }
+    callback(null, true);
+  },
 });
 
+const VALID_STATUSES = ["review", "active", "resolved", "hold"] as const;
+
 const updateSchema = z.object({
-  status: z.string().min(1).optional(),
+  status: z.enum(VALID_STATUSES).optional(),
   summary: z.string().min(1).optional(),
   description: z.string().nullable().optional(),
   assignedReviewer: z.string().nullable().optional(),
@@ -76,7 +112,8 @@ router.get("/", async (req, res) => {
     );
   }
 
-  const limit = Math.min(Number(req.query.limit ?? 500), 1000);
+  const rawLimit = Number(req.query.limit ?? 500);
+  const limit = Math.min(Math.max(Number.isFinite(rawLimit) ? rawLimit : 500, 1), 1000);
   const whereClause = clauses.length > 0 ? `WHERE ${clauses.join(" AND ")}` : "";
 
   const result = await query<{
@@ -289,7 +326,7 @@ router.get("/:code", async (req, res) => {
   });
 });
 
-router.patch("/:code", async (req, res) => {
+router.patch("/:code", requireRole("admin", "reviewer"), async (req, res) => {
   const parsed = updateSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ message: "Invalid update payload." });
@@ -348,7 +385,7 @@ router.patch("/:code", async (req, res) => {
   });
 });
 
-router.post("/:code/comments", async (req, res) => {
+router.post("/:code/comments", requireRole("admin", "reviewer"), async (req, res) => {
   const parsed = commentSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ message: "Comment body is required." });
@@ -388,7 +425,19 @@ router.post("/:code/comments", async (req, res) => {
   });
 });
 
-router.post("/:code/documents", upload.single("file"), async (req, res) => {
+router.post("/:code/documents", requireRole("admin", "reviewer"), (req, res, next) => {
+  upload.single("file")(req, res, (err: unknown) => {
+    if (err instanceof multer.MulterError) {
+      res.status(400).json({ message: `Upload error: ${err.message}` });
+      return;
+    }
+    if (err instanceof Error) {
+      res.status(400).json({ message: err.message });
+      return;
+    }
+    next();
+  });
+}, async (req, res) => {
   if (!req.file || !req.user) {
     res.status(400).json({ message: "A file is required." });
     return;
@@ -406,36 +455,41 @@ router.post("/:code/documents", upload.single("file"), async (req, res) => {
     return;
   }
 
-  const result = await query<{
-    id: number;
-    original_name: string;
-    mime_type: string | null;
-    size_bytes: number;
-    created_at: string;
-  }>(
-    `
-      INSERT INTO documents (question_area_id, original_name, stored_name, mime_type, size_bytes, uploaded_by)
-      VALUES ($1, $2, $3, $4, $5, $6)
-      RETURNING id, original_name, mime_type, size_bytes, created_at
-    `,
-    [
-      area.id,
-      req.file.originalname,
-      req.file.filename,
-      req.file.mimetype,
-      req.file.size,
-      req.user.id,
-    ],
-  );
+  try {
+    const result = await query<{
+      id: number;
+      original_name: string;
+      mime_type: string | null;
+      size_bytes: number;
+      created_at: string;
+    }>(
+      `
+        INSERT INTO documents (question_area_id, original_name, stored_name, mime_type, size_bytes, uploaded_by)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, original_name, mime_type, size_bytes, created_at
+      `,
+      [
+        area.id,
+        req.file.originalname,
+        req.file.filename,
+        req.file.mimetype,
+        req.file.size,
+        req.user.id,
+      ],
+    );
 
-  res.status(201).json({
-    id: result.rows[0].id,
-    originalName: result.rows[0].original_name,
-    mimeType: result.rows[0].mime_type,
-    sizeBytes: result.rows[0].size_bytes,
-    createdAt: result.rows[0].created_at,
-    downloadUrl: `/api/question-areas/documents/${result.rows[0].id}/download`,
-  });
+    res.status(201).json({
+      id: result.rows[0].id,
+      originalName: result.rows[0].original_name,
+      mimeType: result.rows[0].mime_type,
+      sizeBytes: result.rows[0].size_bytes,
+      createdAt: result.rows[0].created_at,
+      downloadUrl: `/api/question-areas/documents/${result.rows[0].id}/download`,
+    });
+  } catch (dbError) {
+    await fs.unlink(req.file.path).catch(() => undefined);
+    throw dbError;
+  }
 });
 
 router.get("/documents/:id/download", async (req, res) => {
@@ -453,7 +507,15 @@ router.get("/documents/:id/download", async (req, res) => {
     return;
   }
 
-  res.download(path.join(config.uploadsDir, document.stored_name), document.original_name);
+  const filePath = path.join(config.uploadsDir, document.stored_name);
+  try {
+    await fs.access(filePath);
+  } catch {
+    res.status(404).json({ message: "Document file is missing from storage." });
+    return;
+  }
+
+  res.download(filePath, document.original_name);
 });
 
 export default router;

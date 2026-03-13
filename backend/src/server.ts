@@ -27,8 +27,13 @@ async function bootstrap(): Promise<void> {
   app.use(express.json({ limit: "10mb" }));
   app.use(express.urlencoded({ extended: true }));
 
-  app.get("/api/health", (_req, res) => {
-    res.json({ status: "ok" });
+  app.get("/api/health", async (_req, res) => {
+    try {
+      await pool.query("SELECT 1");
+      res.json({ status: "ok" });
+    } catch {
+      res.status(503).json({ status: "degraded", message: "Database connection failed." });
+    }
   });
 
   app.use("/api/auth", authRoutes);

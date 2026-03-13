@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 
+import type { Role } from "../lib/auth.js";
 import { authenticateRequest, comparePassword, signToken } from "../lib/auth.js";
 import { query } from "../lib/db.js";
 
@@ -45,7 +46,7 @@ router.post("/login", async (req, res) => {
     id: user.id,
     email: user.email,
     name: user.name,
-    role: user.role,
+    role: user.role as Role,
   });
 
   res.json({
