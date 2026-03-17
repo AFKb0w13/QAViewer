@@ -335,7 +335,7 @@ textarea {
 
 .stats-section {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 12px;
 }
 
@@ -366,7 +366,6 @@ textarea {
 }
 
 .search-results,
-.layer-list,
 .comment-list,
 .document-list,
 .parcel-list,
@@ -392,20 +391,6 @@ textarea {
   background: #f0fdfa;
 }
 
-.layer-toggle {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 0.95rem;
-  cursor: pointer;
-}
-
-.layer-toggle input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-  cursor: pointer;
-  accent-color: var(--accent);
-}
 
 .map-statusbar {
   position: absolute;
@@ -512,6 +497,108 @@ textarea {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+
+.legend-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.legend-swatch {
+  flex-shrink: 0;
+  width: 28px;
+  height: 18px;
+  border-radius: 3px;
+  border: 2px solid transparent;
+}
+
+.legend-swatch-management {
+  border-color: #39ff14;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='6' height='6'%3E%3Ccircle cx='3' cy='3' r='1' fill='%2339ff14'/%3E%3C/svg%3E");
+}
+
+.legend-swatch-parcels {
+  border-color: #ea580c;
+  background: transparent;
+}
+
+.legend-swatch-qa-active {
+  border-color: #ea580c;
+  background: rgba(251, 146, 60, 0.5);
+}
+
+.legend-swatch-qa-inactive {
+  border-color: #94a3b8;
+  background: rgba(203, 213, 225, 0.4);
+}
+
+.legend-label {
+  flex: 1;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.legend-eye {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--accent);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+  padding: 0;
+}
+
+.legend-eye:hover {
+  background: #f1f5f9;
+}
+
+.legend-eye svg {
+  display: block;
+}
+
+.legend-eye-spacer {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+}
+
+.qa-reason {
+  margin-top: 16px;
+  padding: 16px;
+  background: #fefce8;
+  border: 1px solid #fde047;
+  border-radius: var(--radius-sm);
+}
+
+.qa-reason dt {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 600;
+  color: #a16207;
+  margin-bottom: 6px;
+}
+
+.qa-reason dd {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--ink);
+  line-height: 1.6;
 }
 
 .empty-state {

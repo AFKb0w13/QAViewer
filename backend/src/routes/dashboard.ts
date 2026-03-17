@@ -64,19 +64,19 @@ router.get("/search", async (req, res) => {
     ),
     query<{
       id: number;
-      parcel_code: string | null;
+      parcel_number: string | null;
       owner_name: string | null;
       county: string | null;
       state: string | null;
     }>(
       `
-        SELECT id, parcel_code, owner_name, county, state
-        FROM parcel_points
-        WHERE COALESCE(parcel_code, '') ILIKE $1
+        SELECT id, parcel_number, owner_name, county, state
+        FROM parcel_features
+        WHERE COALESCE(parcel_number, '') ILIKE $1
            OR COALESCE(owner_name, '') ILIKE $1
            OR COALESCE(county, '') ILIKE $1
            OR COALESCE(state, '') ILIKE $1
-        ORDER BY parcel_code NULLS LAST
+        ORDER BY parcel_number NULLS LAST
         LIMIT 8
       `,
       [searchValue],
@@ -95,7 +95,7 @@ router.get("/search", async (req, res) => {
       ...parcels.rows.map((row) => ({
         type: "parcel",
         id: String(row.id),
-        label: row.parcel_code ?? "Unnamed parcel",
+        label: row.parcel_number ?? "Unnamed parcel",
         subtitle: [row.owner_name, row.county, row.state].filter(Boolean).join(" | "),
       })),
     ].slice(0, 10),

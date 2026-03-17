@@ -1,15 +1,14 @@
 {
   "sourceDatabase": "BTG_PTV_Implementation.gdb",
   "questionAreas": {
-    "questionAreas": 157,
+    "questionAreas": 557,
     "sourceBreakdown": {
-      "primary_gap": 149,
-      "comparison_gap": 8
+      "primary": 557
     },
     "bounds": {
-      "minLng": -123.288083,
-      "minLat": 33.166698,
-      "maxLng": -77.599832,
+      "minLng": -123.339746,
+      "minLat": 33.336368,
+      "maxLng": -77.54516,
       "maxLat": 47.296572
     }
   },
@@ -37,26 +36,6 @@
     "management_tracts": {
       "sourceLayer": "BTG_MGMT_NoArches",
       "featureCount": 896,
-      "bounds": {
-        "minLng": -124.120398,
-        "minLat": 33.159036,
-        "maxLng": -73.553456,
-        "maxLat": 47.338963
-      }
-    },
-    "tax_counties": {
-      "sourceLayer": "TaxParcels_CountySplits_Combined",
-      "featureCount": 99,
-      "bounds": {
-        "minLng": -124.131062,
-        "minLat": 33.153956,
-        "maxLng": -73.543526,
-        "maxLat": 47.342668
-      }
-    },
-    "management_counties": {
-      "sourceLayer": "Management_CountySplits_Combined",
-      "featureCount": 87,
       "bounds": {
         "minLng": -124.120398,
         "minLat": 33.159036,

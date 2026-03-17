@@ -33,10 +33,7 @@ type SummaryPayload = {
 
 type LayerKey =
   | "primary_parcels"
-  | "parcel_points"
-  | "management_tracts"
-  | "tax_counties"
-  | "management_counties";
+  | "management_tracts";
 
 type QuestionAreaFeature = Feature<
   Geometry,
@@ -128,11 +125,22 @@ const STATUS_OPTIONS = ["review", "active", "resolved", "hold"];
 
 const initialLayers: Record<LayerKey, boolean> = {
   primary_parcels: true,
-  parcel_points: false,
-  management_tracts: false,
-  tax_counties: false,
-  management_counties: true,
+  management_tracts: true,
 };
+
+type LegendItem = {
+  key: string;
+  label: string;
+  swatch: string;
+  toggleable: boolean;
+};
+
+const LEGEND_ITEMS: LegendItem[] = [
+  { key: "management_tracts", label: "Management", swatch: "management", toggleable: true },
+  { key: "primary_parcels", label: "Primary Parcels", swatch: "parcels", toggleable: true },
+  { key: "qa_active", label: "Active QA Parcel", swatch: "qa-active", toggleable: false },
+  { key: "qa_inactive", label: "Inactive QA Parcel", swatch: "qa-inactive", toggleable: false },
+];
 
 export function MapWorkspace({ session, onLogout }: MapWorkspaceProps) {
   const [summary, setSummary] = useState<SummaryPayload | null>(null);
@@ -465,10 +473,7 @@ export function MapWorkspace({ session, onLogout }: MapWorkspaceProps) {
     setSearchFilter(result.label);
   }
 
-  const questionAreaList = questionAreas?.features.slice(0, 12) ?? [];
   const activeCount = summary?.statuses.active ?? 0;
-  const reviewCount = summary?.statuses.review ?? summary?.questionAreas ?? 0;
-  const highSeverityCount = summary?.severities.high ?? 0;
 
   return (
     <main className="workspace-shell">
@@ -492,20 +497,10 @@ export function MapWorkspace({ session, onLogout }: MapWorkspaceProps) {
         <aside className="workspace-panel left-panel">
           <section className="panel-section stats-section">
             <div className="stat-card">
-              <span>Question areas</span>
-              <strong>{summary?.questionAreas ?? "..."}</strong>
-            </div>
-            <div className="stat-card">
-              <span>Under review</span>
-              <strong>{busy.summary ? "..." : reviewCount}</strong>
-            </div>
-            <div className="stat-card">
-              <span>High severity</span>
-              <strong>{busy.summary ? "..." : highSeverityCount}</strong>
-            </div>
-            <div className="stat-card">
-              <span>Active</span>
-              <strong>{busy.summary ? "..." : activeCount}</strong>
+              <span>Active Question Areas</span>
+              <strong>
+                {busy.summary ? "..." : activeCount}
+              </strong>
             </div>
           </section>
 
@@ -523,7 +518,7 @@ export function MapWorkspace({ session, onLogout }: MapWorkspaceProps) {
             >
               <input
                 className="search-input"
-                placeholder="Search by QA ID, parcel, owner, project, keyword"
+                placeholder="Search by parcel number, QA ID, owner, project..."
                 value={searchInput}
                 onChange={(event) => setSearchInput(event.target.value)}
               />
@@ -571,48 +566,51 @@ export function MapWorkspace({ session, onLogout }: MapWorkspaceProps) {
 
           <section className="panel-section">
             <div className="section-heading">
-              <h2>Layer stack</h2>
-              <span>Leaflet controls</span>
+              <h2>Legend</h2>
             </div>
-            <div className="layer-list">
-              {(Object.keys(layerVisibility) as LayerKey[]).map((layer) => (
-                <label key={layer} className="layer-toggle">
-                  <input
-                    checked={layerVisibility[layer]}
-                    onChange={() =>
-                      setLayerVisibility((current) => ({
-                        ...current,
-                        [layer]: !current[layer],
-                      }))
-                    }
-                    type="checkbox"
-                  />
-                  <span>{layer.replaceAll("_", " ")}</span>
-                </label>
-              ))}
+            <div className="legend-list">
+              {LEGEND_ITEMS.map((item) => {
+                const isToggleable = item.toggleable;
+                const isVisible = !isToggleable || layerVisibility[item.key as LayerKey];
+                return (
+                  <div key={item.key} className="legend-item">
+                    <span className={`legend-swatch legend-swatch-${item.swatch}`} />
+                    <span className="legend-label">{item.label}</span>
+                    {isToggleable ? (
+                      <button
+                        className="legend-eye"
+                        type="button"
+                        title={isVisible ? "Hide layer" : "Show layer"}
+                        onClick={() =>
+                          setLayerVisibility((current) => ({
+                            ...current,
+                            [item.key]: !current[item.key as LayerKey],
+                          }))
+                        }
+                      >
+                        {isVisible ? (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                        ) : (
+                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                            <line x1="1" y1="1" x2="23" y2="23" />
+                            <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                          </svg>
+                        )}
+                      </button>
+                    ) : (
+                      <span className="legend-eye-spacer" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
 
-          <section className="panel-section result-list">
-            <div className="section-heading">
-              <h2>Visible question areas</h2>
-              <span>{questionAreas?.features.length ?? 0} in viewport</span>
-            </div>
-            {questionAreaList.map((feature) => (
-              <button
-                key={feature.properties?.code}
-                className={`list-card ${selectedCode === feature.properties?.code ? "selected" : ""}`}
-                onClick={() => setSelectedCode(feature.properties?.code ?? null)}
-                type="button"
-              >
-                <div>
-                  <strong>{feature.properties?.title}</strong>
-                  <span>{feature.properties?.code}</span>
-                </div>
-                <small>{feature.properties?.primaryOwnerName ?? feature.properties?.county}</small>
-              </button>
-            ))}
-          </section>
         </aside>
 
         <section className="map-panel">
@@ -626,27 +624,19 @@ export function MapWorkspace({ session, onLogout }: MapWorkspaceProps) {
             />
             <MapViewportWatcher onChange={setMapBbox} />
             <MapFocus detail={selectedDetail} />
-
-            <Pane name="counties" style={{ zIndex: 350 }}>
-              {layerVisibility.management_counties && layerData.management_counties ? (
-                <GeoJSON
-                  data={layerData.management_counties}
-                  style={{ color: "#2ab7a9", weight: 1.3, fillOpacity: 0 }}
-                />
-              ) : null}
-              {layerVisibility.tax_counties && layerData.tax_counties ? (
-                <GeoJSON
-                  data={layerData.tax_counties}
-                  style={{ color: "#94a3b8", weight: 1.1, fillOpacity: 0 }}
-                />
-              ) : null}
-            </Pane>
+            <ManagementPatternDefs />
 
             <Pane name="management" style={{ zIndex: 370 }}>
               {layerVisibility.management_tracts && layerData.management_tracts ? (
                 <GeoJSON
                   data={layerData.management_tracts}
-                  style={{ color: "#38bdf8", weight: 1.2, fillOpacity: 0.04, fillColor: "#7dd3fc" }}
+                  style={{
+                    color: "#39ff14",
+                    weight: 2.5,
+                    fillColor: "url(#management-pattern)",
+                    fillOpacity: 1,
+                    dashArray: "none",
+                  }}
                 />
               ) : null}
             </Pane>
@@ -655,24 +645,7 @@ export function MapWorkspace({ session, onLogout }: MapWorkspaceProps) {
               {layerVisibility.primary_parcels && layerData.primary_parcels ? (
                 <GeoJSON
                   data={layerData.primary_parcels}
-                  style={{ color: "#1a3646", weight: 1.1, fillOpacity: 0.03, fillColor: "#334155" }}
-                />
-              ) : null}
-            </Pane>
-
-            <Pane name="points" style={{ zIndex: 410 }}>
-              {layerVisibility.parcel_points && layerData.parcel_points ? (
-                <GeoJSON
-                  data={layerData.parcel_points}
-                  pointToLayer={(_feature, latlng) =>
-                    L.circleMarker(latlng, {
-                      radius: 4,
-                      color: "#2ab7a9",
-                      weight: 1,
-                      fillColor: "#5eead4",
-                      fillOpacity: 0.9,
-                    })
-                  }
+                  style={primaryParcelStyle}
                 />
               ) : null}
             </Pane>
@@ -714,13 +687,19 @@ export function MapWorkspace({ session, onLogout }: MapWorkspaceProps) {
                   <span className="badge neutral">{selectedDetail.sourceGroup}</span>
                 </div>
                 <dl className="detail-grid">
-                  <DetailItem label="Parcel">{selectedDetail.primaryParcelCode ?? "None"}</DetailItem>
+                  <DetailItem label="Parcel #">{selectedDetail.primaryParcelNumber ?? "None"}</DetailItem>
+                  <DetailItem label="Parcel Code">{selectedDetail.primaryParcelCode ?? "None"}</DetailItem>
                   <DetailItem label="Owner">{selectedDetail.primaryOwnerName ?? "Unknown"}</DetailItem>
                   <DetailItem label="County">{selectedDetail.county ?? "Unknown"}</DetailItem>
                   <DetailItem label="State">{selectedDetail.state ?? "Unknown"}</DetailItem>
                   <DetailItem label="Property">{selectedDetail.propertyName ?? "None"}</DetailItem>
-                  <DetailItem label="Analysis">{selectedDetail.analysisName ?? "None"}</DetailItem>
                 </dl>
+                {selectedDetail.description ? (
+                  <div className="qa-reason">
+                    <dt>QA Reason (Spatial Overlay Notes)</dt>
+                    <dd>{selectedDetail.description}</dd>
+                  </div>
+                ) : null}
               </section>
 
               <section className="panel-section">
@@ -909,6 +888,18 @@ function MapViewportWatcher({ onChange }: { onChange: (bbox: string) => void }) 
   return null;
 }
 
+function ManagementPatternDefs() {
+  return (
+    <svg style={{ height: 0, width: 0, position: "absolute" }} aria-hidden="true">
+      <defs>
+        <pattern id="management-pattern" width="6" height="6" patternUnits="userSpaceOnUse">
+          <circle cx="3" cy="3" r="1" fill="#39ff14" />
+        </pattern>
+      </defs>
+    </svg>
+  );
+}
+
 function MapFocus({ detail }: { detail: QuestionAreaDetail | null }) {
   const map = useMap();
   const code = detail?.code ?? null;
@@ -937,21 +928,44 @@ function DetailItem({ label, children }: { label: string; children: string }) {
   );
 }
 
+function primaryParcelStyle(feature: any) {
+  const status = feature?.properties?.QA_Status?.toLowerCase() || "";
+  const isActive = status === "active";
+  
+  if (isActive) {
+    return { color: "#ea580c", weight: 2, fillOpacity: 0 };
+  }
+  return { color: "#94a3b8", weight: 1, fillOpacity: 0.05, fillColor: "#94a3b8" };
+}
+
 function questionAreaStyle(feature: QuestionAreaFeature | undefined, selectedCode: string | null) {
-  const severity = feature?.properties?.severity ?? "medium";
-  const active = feature?.properties?.code === selectedCode;
-  const palette =
-    severity === "high"
-      ? { color: "#ef4444", fillColor: "#f87171" }
-      : severity === "low"
-        ? { color: "#eab308", fillColor: "#fde047" }
-        : { color: "#f97316", fillColor: "#fb923c" };
+  const status = feature?.properties?.status ?? "review";
+  const isSelected = feature?.properties?.code === selectedCode;
+  const isActive = status === "active";
+
+  if (isSelected) {
+    return {
+      color: "#1a3646",
+      weight: 3,
+      fillColor: isActive ? "#fb923c" : "#94a3b8",
+      fillOpacity: 0.65,
+    };
+  }
+
+  if (isActive) {
+    return {
+      color: "#ea580c",
+      weight: 2,
+      fillColor: "#fb923c",
+      fillOpacity: 0.5,
+    };
+  }
 
   return {
-    color: active ? "#1a3646" : palette.color,
-    weight: active ? 3 : 2,
-    fillColor: palette.fillColor,
-    fillOpacity: active ? 0.5 : 0.3,
+    color: "#94a3b8",
+    weight: 1,
+    fillColor: "#cbd5e1",
+    fillOpacity: 0.2,
   };
 }
 

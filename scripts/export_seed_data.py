@@ -52,74 +52,6 @@ def clean_value(value: Any) -> Any:
     return value
 
 
-def dominant_string(values: list[Any]) -> str | None:
-    normalized = [str(value).strip() for value in values if clean_value(value)]
-    if not normalized:
-        return None
-    series = pd.Series(normalized)
-    return str(series.value_counts().idxmax())
-
-
-def build_related_parcels(feature: pd.Series, primary_matches: gpd.GeoDataFrame) -> list[dict[str, Any]]:
-    parcels: list[dict[str, Any]] = []
-
-    direct_parcel = clean_value(feature.get("parcelnumb"))
-    if direct_parcel:
-        parcels.append(
-            {
-                "parcelNumber": str(direct_parcel),
-                "parcelCode": clean_value(feature.get("PTVParcel")) or clean_value(feature.get("parcelnumb")),
-                "ownerName": clean_value(feature.get("RegridOwner")),
-                "county": clean_value(feature.get("County")),
-                "state": clean_value(feature.get("State")),
-                "propertyName": clean_value(feature.get("PropertyName")),
-                "analysisName": clean_value(feature.get("AnalysisName")),
-                "tractName": clean_value(feature.get("TractName")),
-                "source": "direct",
-            }
-        )
-
-    if primary_matches.empty:
-        return dedupe_parcels(parcels)
-
-    for _, row in primary_matches.iterrows():
-        parcels.append(
-            {
-                "parcelNumber": clean_value(row.get("parcelnumb")),
-                "parcelCode": clean_value(row.get("PTVParcel")) or clean_value(row.get("parcelnumb")),
-                "ownerName": clean_value(row.get("RegridOwner")),
-                "county": clean_value(row.get("County")),
-                "state": clean_value(row.get("State")),
-                "propertyName": clean_value(row.get("PropertyName")),
-                "analysisName": clean_value(row.get("AnalysisName")),
-                "tractName": clean_value(row.get("TractName")),
-                "source": "spatial_join",
-            }
-        )
-
-    return dedupe_parcels(parcels)
-
-
-def dedupe_parcels(parcels: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    seen: set[tuple[Any, ...]] = set()
-    unique: list[dict[str, Any]] = []
-
-    for parcel in parcels:
-        key = (
-            parcel.get("parcelNumber"),
-            parcel.get("parcelCode"),
-            parcel.get("ownerName"),
-            parcel.get("county"),
-            parcel.get("state"),
-        )
-        if key in seen:
-            continue
-        seen.add(key)
-        unique.append(parcel)
-
-    return unique
-
-
 def with_bounds(frame: gpd.GeoDataFrame) -> dict[str, float]:
     min_x, min_y, max_x, max_y = frame.total_bounds
     return {
@@ -136,6 +68,11 @@ def write_geojson(path: Path, frame: gpd.GeoDataFrame) -> None:
 
 
 def build_question_areas() -> tuple[gpd.GeoDataFrame, dict[str, Any]]:
+    """Build question areas from BTG_Spatial_Fix_Primary_Layer.
+
+    A feature becomes a question area when its QA_Status field is not null.
+    The SpatialOverlayNotes field provides the reason for the QA.
+    """
     primary_layer = read_layer(
         "BTG_Spatial_Fix_Primary_Layer",
         [
@@ -151,88 +88,60 @@ def build_question_areas() -> tuple[gpd.GeoDataFrame, dict[str, Any]]:
             "Exists_in_Mgt",
             "Exists_in_PTV",
             "GIS_Acres",
-            "geometry",
-        ],
-    )
-    primary_erase = read_layer(
-        "BTG_Spatial_Fix_Primary_Erase",
-        [
-            "parcelnumb",
-            "County",
-            "State",
-            "RegridOwner",
-            "Legal_Concat",
-            "PropertyName",
-            "AnalysisName",
-            "TractName",
-            "QA_Status",
-            "GIS_Acres",
             "SpatialOverlayNotes",
-            "PTVParcel",
-            "EraseAcres",
-            "OriginalAcres",
-            "OverlapAcres",
-            "OverlapPct",
-            "Class",
-            "geometry",
-        ],
-    )
-    comparison_erase = read_layer(
-        "BTG_Spatial_Fix_Comparison_Erase",
-        [
-            "Fund",
-            "PU_Number",
-            "PU",
-            "Tract_Numb",
-            "Tract_Name",
-            "Ownership",
-            "Comment",
-            "Book_Area",
-            "EraseAcres",
-            "OriginalAcres",
-            "OverlapAcres",
-            "OverlapPct",
-            "Class",
             "geometry",
         ],
     )
 
-    primary_join = gpd.sjoin(
-        primary_erase[["geometry"]],
-        primary_layer,
-        predicate="intersects",
-        how="left",
-    )
-    comparison_join = gpd.sjoin(
-        comparison_erase[["geometry"]],
-        primary_layer,
-        predicate="intersects",
-        how="left",
-    )
+    qa_features = primary_layer[primary_layer["QA_Status"].notna()].copy()
+    print(f"  [question_areas] {len(qa_features)} parcels with active QA_Status out of {len(primary_layer)} total")
 
     question_area_rows: list[dict[str, Any]] = []
 
-    for index, row in primary_erase.iterrows():
-        matches = primary_join.loc[primary_join.index == index].dropna(subset=["parcelnumb"], how="all")
-        related_parcels = build_related_parcels(row, matches)
+    for seq, (_index, row) in enumerate(qa_features.iterrows(), start=1):
         centroid = row.geometry.representative_point()
-        title = clean_value(row.get("Legal_Concat")) or clean_value(row.get("PropertyName")) or clean_value(row.get("parcelnumb"))
-        owner_name = clean_value(row.get("RegridOwner")) or dominant_string([parcel.get("ownerName") for parcel in related_parcels])
+        parcel_code = clean_value(row.get("parcelnumb"))
+        ptv_parcel = clean_value(row.get("PTVParcel"))
+        owner_name = clean_value(row.get("RegridOwner"))
+        overlay_notes = clean_value(row.get("SpatialOverlayNotes"))
+        qa_status_raw = str(clean_value(row.get("QA_Status")) or "").strip().lower()
+        status = qa_status_raw if qa_status_raw in ("review", "active", "resolved", "hold") else "review"
+        title = (
+            clean_value(row.get("PropertyName"))
+            or str(parcel_code or "")
+            or f"QA {seq}"
+        )
+
+        related_parcels = []
+        if parcel_code:
+            related_parcels.append(
+                {
+                    "parcelNumber": str(parcel_code),
+                    "parcelCode": ptv_parcel or parcel_code,
+                    "ownerName": owner_name,
+                    "county": clean_value(row.get("County")),
+                    "state": clean_value(row.get("State")),
+                    "propertyName": clean_value(row.get("PropertyName")),
+                    "analysisName": clean_value(row.get("AnalysisName")),
+                    "tractName": clean_value(row.get("TractName")),
+                    "source": "direct",
+                }
+            )
 
         question_area_rows.append(
             {
-                "question_area_code": f"QA-P-{index + 1:04d}",
-                "source_layer": "BTG_Spatial_Fix_Primary_Erase",
-                "source_group": "primary_gap",
-                "status": "review",
-                "severity": classify_severity(clean_value(row.get("OverlapPct")), clean_value(row.get("EraseAcres"))),
+                "question_area_code": f"QA-{seq:04d}",
+                "source_layer": "BTG_Spatial_Fix_Primary_Layer",
+                "source_group": "primary",
+                "status": status,
+                "severity": "medium",
                 "title": title,
-                "summary": f"Primary-layer spatial mismatch for parcel {clean_value(row.get('parcelnumb')) or 'unknown parcel'}",
-                "description": clean_value(row.get("SpatialOverlayNotes")) or f"Overlap review created from the primary erase layer ({clean_value(row.get('Class'))}).",
+                "summary": overlay_notes or f"QA flagged on parcel {parcel_code or 'unknown'}",
+                "description": overlay_notes,
                 "county": clean_value(row.get("County")),
                 "state": clean_value(row.get("State")),
-                "primary_parcel_number": clean_value(row.get("parcelnumb")),
-                "primary_parcel_code": clean_value(row.get("PTVParcel")) or clean_value(row.get("parcelnumb")),
+                "primary_parcel_number": parcel_code,
+                "primary_parcel_code": ptv_parcel or parcel_code,
                 "primary_owner_name": owner_name,
                 "property_name": clean_value(row.get("PropertyName")),
                 "analysis_name": clean_value(row.get("AnalysisName")),
@@ -242,92 +151,21 @@ def build_question_areas() -> tuple[gpd.GeoDataFrame, dict[str, Any]]:
                     filter(
                         None,
                         [
-                            str(clean_value(row.get("parcelnumb")) or ""),
-                            str(clean_value(row.get("PTVParcel")) or ""),
+                            str(parcel_code or ""),
+                            str(ptv_parcel or ""),
                             str(owner_name or ""),
                             str(clean_value(row.get("County")) or ""),
                             str(clean_value(row.get("State")) or ""),
-                            str(clean_value(row.get("Legal_Concat")) or ""),
+                            str(clean_value(row.get("PropertyName")) or ""),
+                            str(overlay_notes or ""),
+                            str(qa_status_raw or ""),
                         ],
                     )
                 ).strip(),
-                "source_layers": [
-                    "BTG_Spatial_Fix_Primary_Erase",
-                    "BTG_Spatial_Fix_Primary_Layer",
-                    "BTG_Points_NoArches_12Feb26",
-                ],
+                "source_layers": ["BTG_Spatial_Fix_Primary_Layer"],
                 "related_parcels": related_parcels,
                 "metrics": {
                     "gisAcres": clean_value(row.get("GIS_Acres")),
-                    "eraseAcres": clean_value(row.get("EraseAcres")),
-                    "originalAcres": clean_value(row.get("OriginalAcres")),
-                    "overlapAcres": clean_value(row.get("OverlapAcres")),
-                    "overlapPct": clean_value(row.get("OverlapPct")),
-                },
-                "centroid_lat": round(float(centroid.y), 6),
-                "centroid_lng": round(float(centroid.x), 6),
-                "geometry": row.geometry,
-            }
-        )
-
-    for index, row in comparison_erase.iterrows():
-        matches = comparison_join.loc[comparison_join.index == index].dropna(subset=["parcelnumb"], how="all")
-        related_parcels = build_related_parcels(row, matches)
-        centroid = row.geometry.representative_point()
-        county = dominant_string(matches["County"].tolist()) if not matches.empty else None
-        state = dominant_string(matches["State"].tolist()) if not matches.empty else None
-        primary_parcel = related_parcels[0]["parcelNumber"] if related_parcels else None
-        parcel_code = related_parcels[0]["parcelCode"] if related_parcels else None
-        owner_name = related_parcels[0]["ownerName"] if related_parcels else clean_value(row.get("Ownership"))
-        property_name = dominant_string(matches["PropertyName"].tolist()) if not matches.empty else clean_value(row.get("Fund"))
-        analysis_name = dominant_string(matches["AnalysisName"].tolist()) if not matches.empty else clean_value(row.get("PU"))
-
-        question_area_rows.append(
-            {
-                "question_area_code": f"QA-C-{index + 1:04d}",
-                "source_layer": "BTG_Spatial_Fix_Comparison_Erase",
-                "source_group": "comparison_gap",
-                "status": "review",
-                "severity": classify_severity(clean_value(row.get("OverlapPct")), clean_value(row.get("EraseAcres"))),
-                "title": clean_value(row.get("Tract_Name")) or clean_value(row.get("Fund")) or f"Comparison gap {index + 1}",
-                "summary": f"Comparison-layer gap for {clean_value(row.get('Tract_Name')) or clean_value(row.get('Fund'))}",
-                "description": clean_value(row.get("Comment")) or f"Comparison erase area flagged as {clean_value(row.get('Class'))}.",
-                "county": county,
-                "state": state,
-                "primary_parcel_number": primary_parcel,
-                "primary_parcel_code": parcel_code,
-                "primary_owner_name": owner_name,
-                "property_name": property_name,
-                "analysis_name": analysis_name,
-                "tract_name": clean_value(row.get("Tract_Name")),
-                "assigned_reviewer": None,
-                "search_keywords": " ".join(
-                    filter(
-                        None,
-                        [
-                            str(clean_value(row.get("Fund")) or ""),
-                            str(clean_value(row.get("PU")) or ""),
-                            str(clean_value(row.get("Tract_Name")) or ""),
-                            str(primary_parcel or ""),
-                            str(parcel_code or ""),
-                            str(owner_name or ""),
-                            str(county or ""),
-                            str(state or ""),
-                        ],
-                    )
-                ).strip(),
-                "source_layers": [
-                    "BTG_Spatial_Fix_Comparison_Erase",
-                    "BTG_MGMT_NoArches",
-                    "BTG_Spatial_Fix_Primary_Layer",
-                ],
-                "related_parcels": related_parcels,
-                "metrics": {
-                    "bookArea": clean_value(row.get("Book_Area")),
-                    "eraseAcres": clean_value(row.get("EraseAcres")),
-                    "originalAcres": clean_value(row.get("OriginalAcres")),
-                    "overlapAcres": clean_value(row.get("OverlapAcres")),
-                    "overlapPct": clean_value(row.get("OverlapPct")),
                 },
                 "centroid_lat": round(float(centroid.y), 6),
                 "centroid_lng": round(float(centroid.x), 6),
@@ -340,23 +178,20 @@ def build_question_areas() -> tuple[gpd.GeoDataFrame, dict[str, Any]]:
 
     manifest = {
         "questionAreas": len(question_areas),
-        "sourceBreakdown": question_areas["source_group"].value_counts().to_dict(),
+        "sourceBreakdown": {"primary": len(question_areas)},
         "bounds": with_bounds(question_areas),
     }
     return question_areas, manifest
 
 
-def classify_severity(overlap_pct: Any, erase_acres: Any) -> str:
-    pct = clean_value(overlap_pct) or 0
-    acres = clean_value(erase_acres) or 0
-    if pct >= 90 or acres >= 100:
-        return "high"
-    if pct >= 75 or acres >= 25:
-        return "medium"
-    return "low"
-
-
 def export_support_layers() -> dict[str, Any]:
+    """Export the three source layers as GeoJSON for use by the frontend map.
+
+    Layers:
+      - primary_parcels: all parcels from BTG_Spatial_Fix_Primary_Layer
+      - parcel_points: centroid points from BTG_Points_NoArches_12Feb26
+      - management_tracts: authoritative management claims from BTG_MGMT_NoArches
+    """
     layer_specs: dict[str, tuple[str, list[str]]] = {
         "primary_parcels": (
             "BTG_Spatial_Fix_Primary_Layer",
@@ -373,6 +208,7 @@ def export_support_layers() -> dict[str, Any]:
                 "Exists_in_Mgt",
                 "Exists_in_PTV",
                 "GIS_Acres",
+                "SpatialOverlayNotes",
                 "geometry",
             ],
         ),
@@ -403,28 +239,6 @@ def export_support_layers() -> dict[str, Any]:
                 "Ownership",
                 "Comment",
                 "Book_Area",
-                "geometry",
-            ],
-        ),
-        "tax_counties": (
-            "TaxParcels_CountySplits_Combined",
-            [
-                "NAME",
-                "State_Abbr",
-                "County_State",
-                "Billed_Acreage",
-                "GIS_Acres",
-                "geometry",
-            ],
-        ),
-        "management_counties": (
-            "Management_CountySplits_Combined",
-            [
-                "NAME",
-                "State_Abbr",
-                "County_State",
-                "Billed_Acreage",
-                "GIS_Acres",
                 "geometry",
             ],
         ),

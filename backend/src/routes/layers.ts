@@ -27,20 +27,6 @@ const layerConfig = {
     orderBy: "id",
     limit: 3000,
   },
-  tax_counties: {
-    table: "county_boundaries",
-    geometryExpression: "ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.002), 5)::jsonb",
-    wherePrefix: "layer_group = 'tax_counties'",
-    orderBy: "id",
-    limit: 500,
-  },
-  management_counties: {
-    table: "county_boundaries",
-    geometryExpression: "ST_AsGeoJSON(ST_SimplifyPreserveTopology(geom, 0.002), 5)::jsonb",
-    wherePrefix: "layer_group = 'management_counties'",
-    orderBy: "id",
-    limit: 500,
-  },
 } as const;
 
 router.get("/:layerKey", async (req, res) => {

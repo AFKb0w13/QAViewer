@@ -33,7 +33,6 @@ const SEED_TABLES = [
   "parcel_features",
   "parcel_points",
   "management_tracts",
-  "county_boundaries",
 ] as const;
 
 async function tableCounts(client: PoolClient): Promise<Record<string, number>> {
@@ -46,8 +45,6 @@ async function tableCounts(client: PoolClient): Promise<Record<string, number>> 
       SELECT 'parcel_points', COUNT(*)::text FROM parcel_points
       UNION ALL
       SELECT 'management_tracts', COUNT(*)::text FROM management_tracts
-      UNION ALL
-      SELECT 'county_boundaries', COUNT(*)::text FROM county_boundaries
     ) sub
   `);
   return Object.fromEntries(result.rows.map((r) => [r.tbl, Number(r.count)]));
@@ -68,8 +65,6 @@ export async function ensureSeedData(client: PoolClient): Promise<void> {
   const parcelFeatures = await loadFeatureCollection("primary_parcels.geojson");
   const parcelPoints = await loadFeatureCollection("parcel_points.geojson");
   const managementTracts = await loadFeatureCollection("management_tracts.geojson");
-  const taxCounties = await loadFeatureCollection("tax_counties.geojson");
-  const managementCounties = await loadFeatureCollection("management_counties.geojson");
 
   if ((counts["question_areas"] ?? 0) === 0) {
     for (const feature of questionAreas.features) {
@@ -92,15 +87,6 @@ export async function ensureSeedData(client: PoolClient): Promise<void> {
   if ((counts["management_tracts"] ?? 0) === 0) {
     for (const feature of managementTracts.features) {
       await insertManagementTract(client, feature);
-    }
-  }
-
-  if ((counts["county_boundaries"] ?? 0) === 0) {
-    for (const feature of taxCounties.features) {
-      await insertCountyBoundary(client, feature, "tax_counties");
-    }
-    for (const feature of managementCounties.features) {
-      await insertCountyBoundary(client, feature, "management_counties");
     }
   }
 
@@ -328,45 +314,6 @@ async function insertManagementTract(
       properties.Ownership,
       properties.Comment,
       properties.Book_Area,
-      JSON.stringify(properties),
-      JSON.stringify(feature.geometry),
-    ],
-  );
-}
-
-async function insertCountyBoundary(
-  client: PoolClient,
-  feature: Feature<Geometry, GeoJsonProperties>,
-  layerGroup: "tax_counties" | "management_counties",
-): Promise<void> {
-  if (!feature.geometry) {
-    return;
-  }
-  const properties = feature.properties ?? {};
-  await client.query(
-    `
-      INSERT INTO county_boundaries (
-        layer_group,
-        name,
-        state_abbr,
-        county_state,
-        billed_acreage,
-        gis_acres,
-        raw_properties,
-        geom
-      )
-      VALUES (
-        $1, $2, $3, $4, $5, $6, $7::jsonb,
-        ST_Multi(ST_SetSRID(ST_GeomFromGeoJSON($8), 4326))
-      )
-    `,
-    [
-      layerGroup,
-      properties.NAME,
-      properties.State_Abbr,
-      properties.County_State,
-      properties.Billed_Acreage,
-      properties.GIS_Acres,
       JSON.stringify(properties),
       JSON.stringify(feature.geometry),
     ],
