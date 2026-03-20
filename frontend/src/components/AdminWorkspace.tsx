@@ -283,23 +283,25 @@ export function AdminWorkspace({
   return (
     <main className="workspace-shell">
       <header className="workspace-header">
-        <div>
+        <div className="header-brand">
           <p className="eyebrow">QAViewer</p>
-          <h1>Administration console</h1>
+          <h1>Administration</h1>
         </div>
         <div className="header-actions">
-          <button className="ghost-button" onClick={onOpenReview} type="button">
-            Review workspace
-          </button>
-          <div className="user-chip">
-            <span>{session.user.name}</span>
-            <small>{session.user.role}</small>
+          <div className="header-actions-layout">
+            <div className="header-button-row">
+              <button className="ghost-button" onClick={onOpenReview} type="button">
+                Review workspace
+              </button>
+              <button className="ghost-button" onClick={onLogout} type="button">
+                Sign out
+              </button>
+            </div>
+            <span className="user-name-sub">{session.user.name}</span>
           </div>
-          <button className="ghost-button" onClick={onLogout} type="button">
-            Sign out
-          </button>
         </div>
       </header>
+
 
       {feedback ? <div className={`toast toast-${feedback.type}`}>{feedback.message}</div> : null}
 

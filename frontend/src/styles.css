@@ -268,7 +268,26 @@ textarea {
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 16px;
+}
+
+.header-actions-layout {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+}
+
+.header-button-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-name-sub {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-weight: 500;
+  margin-right: 4px;
 }
 
 .user-chip {

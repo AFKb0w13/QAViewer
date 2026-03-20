@@ -552,23 +552,24 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
   return (
     <main className="workspace-shell">
       <header className="workspace-header">
-        <div>
+        <div className="header-brand">
           <p className="eyebrow">QAViewer</p>
           <h1>Question area review console</h1>
         </div>
         <div className="header-actions">
-          {onOpenAdmin ? (
-            <button className="ghost-button" onClick={onOpenAdmin} type="button">
-              Admin console
-            </button>
-          ) : null}
-          <div className="user-chip">
-            <span>{session.user.name}</span>
-            <small>{session.user.role}</small>
+          <div className="header-actions-layout">
+            <div className="header-button-row">
+              {onOpenAdmin ? (
+                <button className="ghost-button" onClick={onOpenAdmin} type="button">
+                  Admin console
+                </button>
+              ) : null}
+              <button className="ghost-button" onClick={onLogout} type="button">
+                Sign out
+              </button>
+            </div>
+            <span className="user-name-sub">{session.user.name}</span>
           </div>
-          <button className="ghost-button" onClick={onLogout} type="button">
-            Sign out
-          </button>
         </div>
       </header>
 
@@ -1131,6 +1132,7 @@ function primaryParcelStyle(
   selectedParcelId: number | null,
 ) {
   const isSelected = feature?.properties?.id === selectedParcelId;
+  const isActive = isParcelActive(feature?.properties?.QA_Status);
 
   if (isSelected) {
     return {
@@ -1142,9 +1144,11 @@ function primaryParcelStyle(
   }
 
   return {
-    color: "#ea580c",
+    color: isActive ? "#ea580c" : "#c2410c",
     weight: 2,
-    fillOpacity: 0,
+    fillColor: "#ea580c",
+    // Keep parcel interiors clickable even when they appear visually transparent.
+    fillOpacity: 0.01,
   };
 }
 
