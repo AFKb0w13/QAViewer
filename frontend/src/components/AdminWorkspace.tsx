@@ -36,9 +36,9 @@ type AdminWorkspaceProps = {
   onSessionUpdate: (user: Session["user"]) => void;
 };
 
-const ROLE_OPTIONS: UserRole[] = ["admin", "reviewer", "client"];
+const ROLE_OPTIONS: UserRole[] = ["admin", "client"];
 
-function emptyUserDraft(role: UserRole = "reviewer"): UserDraft {
+function emptyUserDraft(role: UserRole = "client"): UserDraft {
   return {
     name: "",
     email: "",
@@ -72,9 +72,11 @@ export function AdminWorkspace({
 }: AdminWorkspaceProps) {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [activeTab, setActiveTab] = useState<"edit" | "create">("edit");
   const [createDraft, setCreateDraft] = useState<UserDraft>(() => emptyUserDraft());
   const [editDraft, setEditDraft] = useState<UserDraft>(() => emptyUserDraft());
-  const [feedback, setFeedback] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ message: string; type: "success" | "error" | "info" } | null>(null);
   const [busy, setBusy] = useState({
     loading: false,
     creating: false,
@@ -83,13 +85,22 @@ export function AdminWorkspace({
   });
 
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
-  const roleCounts = users.reduce<Record<UserRole, number>>(
-    (counts, user) => {
-      counts[user.role] += 1;
-      return counts;
-    },
-    { admin: 0, reviewer: 0, client: 0 },
+  const adminCount = users.filter((user) => user.role === "admin").length;
+
+  const filteredUsers = users.filter(
+    (u) =>
+      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.email.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  function getInitials(name: string) {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  }
 
   async function loadUsers(preferredSelection?: number | null) {
     setBusy((current) => ({ ...current, loading: true }));
@@ -107,9 +118,11 @@ export function AdminWorkspace({
         }
         return payload.users[0]?.id ?? null;
       });
-      setFeedback(null);
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Failed to load users.");
+      setFeedback({
+        message: error instanceof Error ? error.message : "Failed to load users.",
+        type: "error",
+      });
     } finally {
       setBusy((current) => ({ ...current, loading: false }));
     }
@@ -133,6 +146,14 @@ export function AdminWorkspace({
     });
   }, [selectedUser]);
 
+  // Clear feedback after 5 seconds
+  useEffect(() => {
+    if (feedback) {
+      const timer = setTimeout(() => setFeedback(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [feedback]);
+
   async function handleCreateUser(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy((current) => ({ ...current, creating: true }));
@@ -146,9 +167,13 @@ export function AdminWorkspace({
 
       setCreateDraft(emptyUserDraft());
       await loadUsers(payload.user.id);
-      setFeedback(`Created ${payload.user.name}.`);
+      setFeedback({ message: `Created ${payload.user.name}.`, type: "success" });
+      setActiveTab("edit");
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Failed to create user.");
+      setFeedback({
+        message: error instanceof Error ? error.message : "Failed to create user.",
+        type: "error",
+      });
     } finally {
       setBusy((current) => ({ ...current, creating: false }));
     }
@@ -184,9 +209,12 @@ export function AdminWorkspace({
       }
 
       await loadUsers(payload.user.id);
-      setFeedback(`Updated ${payload.user.name}.`);
+      setFeedback({ message: `Updated ${payload.user.name}.`, type: "success" });
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Failed to update user.");
+      setFeedback({
+        message: error instanceof Error ? error.message : "Failed to update user.",
+        type: "error",
+      });
     } finally {
       setBusy((current) => ({ ...current, saving: false }));
     }
@@ -212,9 +240,12 @@ export function AdminWorkspace({
 
       const deletedName = selectedUser.name;
       await loadUsers();
-      setFeedback(`Deleted ${deletedName}.`);
+      setFeedback({ message: `Deleted ${deletedName}.`, type: "success" });
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : "Failed to delete user.");
+      setFeedback({
+        message: error instanceof Error ? error.message : "Failed to delete user.",
+        type: "error",
+      });
     } finally {
       setBusy((current) => ({ ...current, deleting: false }));
     }
@@ -225,14 +256,14 @@ export function AdminWorkspace({
     selectedUser.id === session.user.id ||
     selectedUser.commentCount > 0 ||
     selectedUser.documentCount > 0 ||
-    (selectedUser.role === "admin" && roleCounts.admin <= 1);
+    (selectedUser.role === "admin" && adminCount <= 1);
 
   return (
     <main className="workspace-shell">
       <header className="workspace-header">
-        <div>
+        <div className="header-brand">
           <p className="eyebrow">QAViewer</p>
-          <h1>Administration console</h1>
+          <h1>Administration</h1>
         </div>
         <div className="header-actions">
           <button className="ghost-button" onClick={onOpenReview} type="button">
@@ -248,132 +279,166 @@ export function AdminWorkspace({
         </div>
       </header>
 
+      {feedback && (
+        <div className={`toast toast-${feedback.type}`}>
+          {feedback.message}
+        </div>
+      )}
+
       <section className="admin-grid">
         <aside className="workspace-panel">
-          <section className="panel-section admin-stats-grid">
-            <div className="stat-card">
-              <span>Total users</span>
-              <strong>{busy.loading ? "..." : users.length}</strong>
-            </div>
-            <div className="stat-card">
-              <span>Admins</span>
-              <strong>{busy.loading ? "..." : roleCounts.admin}</strong>
-            </div>
-            <div className="stat-card">
-              <span>Reviewers</span>
-              <strong>{busy.loading ? "..." : roleCounts.reviewer}</strong>
-            </div>
-            <div className="stat-card">
-              <span>Clients</span>
-              <strong>{busy.loading ? "..." : roleCounts.client}</strong>
-            </div>
-          </section>
-
-          <section className="panel-section">
+          <header className="panel-header">
             <div className="section-heading">
               <h2>Users</h2>
-              <span>{busy.loading ? "Refreshing..." : `${users.length} loaded`}</span>
+              <span className="count-badge">{users.length}</span>
             </div>
-            <div className="result-list">
-              {users.map((user) => (
-                <button
-                  key={user.id}
-                  className={`list-card user-card ${user.id === selectedUserId ? "selected" : ""}`}
-                  onClick={() => setSelectedUserId(user.id)}
-                  type="button"
-                >
+            <div className="search-box">
+              <input
+                type="text"
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="search-input"
+              />
+            </div>
+          </header>
+          <div className="result-list">
+            {filteredUsers.map((user) => (
+              <button
+                key={user.id}
+                className={`list-card user-card ${user.id === selectedUserId ? "selected" : ""}`}
+                onClick={() => {
+                  setSelectedUserId(user.id);
+                  setActiveTab("edit");
+                }}
+                type="button"
+              >
+                <div className="user-avatar">
+                  {getInitials(user.name)}
+                </div>
+                <div className="user-info">
                   <div className="user-card-head">
                     <strong>{user.name}</strong>
                     <span className={`badge role-badge role-${user.role}`}>{labelRole(user.role)}</span>
                   </div>
-                  <span>{user.email}</span>
-                  <small>
-                    {user.id === session.user.id ? "Current account | " : ""}
+                  <span className="user-email">{user.email}</span>
+                  <small className="user-activity">
+                    {user.id === session.user.id ? "Current account • " : ""}
                     {summarizeActivity(user)}
                   </small>
-                </button>
-              ))}
-              {!busy.loading && users.length === 0 ? (
-                <p className="empty-state">No users are available yet.</p>
-              ) : null}
-            </div>
-          </section>
+                </div>
+              </button>
+            ))}
+            {!busy.loading && filteredUsers.length === 0 ? (
+              <p className="empty-state">No users match your search.</p>
+            ) : null}
+          </div>
         </aside>
 
         <section className="workspace-panel">
-          <section className="panel-section">
-            <div className="section-heading">
-              <h2>Create user</h2>
-              <span>Admin only</span>
-            </div>
-            <form className="form-stack" onSubmit={handleCreateUser}>
-              <label>
-                Name
-                <input
-                  value={createDraft.name}
-                  onChange={(event) =>
-                    setCreateDraft((current) => ({ ...current, name: event.target.value }))
-                  }
-                />
-              </label>
-              <div className="admin-form-grid">
-                <label>
-                  Email
-                  <input
-                    value={createDraft.email}
-                    onChange={(event) =>
-                      setCreateDraft((current) => ({ ...current, email: event.target.value }))
-                    }
-                  />
-                </label>
-                <label>
-                  Role
-                  <select
-                    value={createDraft.role}
-                    onChange={(event) =>
-                      setCreateDraft((current) => ({
-                        ...current,
-                        role: event.target.value as UserRole,
-                      }))
-                    }
-                  >
-                    {ROLE_OPTIONS.map((role) => (
-                      <option key={role} value={role}>
-                        {labelRole(role)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              <label>
-                Password
-                <input
-                  type="password"
-                  value={createDraft.password}
-                  onChange={(event) =>
-                    setCreateDraft((current) => ({ ...current, password: event.target.value }))
-                  }
-                />
-              </label>
-              <button className="primary-button" disabled={busy.creating} type="submit">
-                {busy.creating ? "Creating..." : "Create user"}
-              </button>
-            </form>
-          </section>
+          <nav className="tab-nav">
+            <button
+              className={`tab-link ${activeTab === "edit" ? "active" : ""}`}
+              onClick={() => setActiveTab("edit")}
+            >
+              User Details
+            </button>
+            <button
+              className={`tab-link ${activeTab === "create" ? "active" : ""}`}
+              onClick={() => setActiveTab("create")}
+            >
+              Create New User
+            </button>
+          </nav>
 
-          <section className="panel-section">
-            <div className="section-heading">
-              <h2>Edit user</h2>
-              <span>{selectedUser ? selectedUser.email : "Select a user"}</span>
-            </div>
+          <div className="tab-content">
+            {activeTab === "create" && (
+              <section className="panel-section">
+                <div className="section-heading">
+                  <h2>Create user</h2>
+                  <span>New account credentials</span>
+                </div>
+                <form className="form-stack" onSubmit={handleCreateUser}>
+                  <label>
+                    Name
+                    <input
+                      required
+                      placeholder="Full Name"
+                      value={createDraft.name}
+                      onChange={(event) =>
+                        setCreateDraft((current) => ({ ...current, name: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <div className="admin-form-grid">
+                    <label>
+                      Email
+                      <input
+                        required
+                        type="email"
+                        placeholder="email@example.com"
+                        value={createDraft.email}
+                        onChange={(event) =>
+                          setCreateDraft((current) => ({ ...current, email: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Role
+                      <select
+                        value={createDraft.role}
+                        onChange={(event) =>
+                          setCreateDraft((current) => ({
+                            ...current,
+                            role: event.target.value as UserRole,
+                          }))
+                        }
+                      >
+                        {ROLE_OPTIONS.map((role) => (
+                          <option key={role} value={role}>
+                            {labelRole(role)}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                  <label>
+                    Password
+                    <input
+                      required
+                      type="password"
+                      placeholder="Minimum 8 characters"
+                      value={createDraft.password}
+                      onChange={(event) =>
+                        setCreateDraft((current) => ({ ...current, password: event.target.value }))
+                      }
+                    />
+                  </label>
+                  <div className="form-actions">
+                    <button className="primary-button" disabled={busy.creating} type="submit">
+                      {busy.creating ? "Creating..." : "Create user"}
+                    </button>
+                  </div>
+                </form>
+              </section>
+            )}
 
-            {selectedUser ? (
-              <>
-                <div className="admin-user-meta">
-                  <span>
-                    Created {new Date(selectedUser.createdAt).toLocaleDateString()}
-                  </span>
-                  <span>{summarizeActivity(selectedUser)}</span>
+            {activeTab === "edit" && selectedUser && (
+              <section className="panel-section">
+                <div className="section-heading">
+                  <h2>Edit user</h2>
+                  <span className="status-label">Active Member</span>
+                </div>
+
+                <div className="admin-user-meta-v2">
+                  <div className="meta-item">
+                    <small>Member Since</small>
+                    <span>{new Date(selectedUser.createdAt).toLocaleDateString()}</span>
+                  </div>
+                  <div className="meta-item">
+                    <small>Authored Content</small>
+                    <span>{summarizeActivity(selectedUser)}</span>
+                  </div>
                 </div>
 
                 <form className="form-stack" onSubmit={handleSaveUser}>
@@ -416,27 +481,28 @@ export function AdminWorkspace({
                     </label>
                   </div>
                   <label>
-                    New password
+                    Update Password
                     <input
                       type="password"
-                      placeholder="Leave blank to keep the current password"
+                      placeholder="Leave blank to keep current"
                       value={editDraft.password}
                       onChange={(event) =>
                         setEditDraft((current) => ({ ...current, password: event.target.value }))
                       }
                     />
                   </label>
-                  <button className="primary-button" disabled={busy.saving} type="submit">
-                    {busy.saving ? "Saving..." : "Save user changes"}
-                  </button>
+                  <div className="form-actions">
+                    <button className="primary-button" disabled={busy.saving} type="submit">
+                      {busy.saving ? "Saving Changes..." : "Save user changes"}
+                    </button>
+                  </div>
                 </form>
 
                 <div className="admin-danger-zone">
-                  <div>
+                  <div className="danger-info">
                     <h3>Delete user</h3>
                     <p>
-                      Delete is blocked for the current admin, the last admin, and users with
-                      authored records.
+                      Removing a user is permanent. This action is disabled if the user has active contributions.
                     </p>
                   </div>
                   <button
@@ -448,21 +514,17 @@ export function AdminWorkspace({
                     {busy.deleting ? "Deleting..." : "Delete user"}
                   </button>
                 </div>
-              </>
-            ) : (
-              <p className="empty-state">Choose a user from the list to edit their account.</p>
+              </section>
             )}
-          </section>
 
-          <section className="panel-section">
-            <div className="section-heading">
-              <h2>Admin status</h2>
-              <span>System feedback</span>
-            </div>
-            <p className="panel-note">
-              {feedback ?? "Admin controls are ready. Changes apply immediately after save."}
-            </p>
-          </section>
+            {activeTab === "edit" && !selectedUser && (
+              <div className="empty-state-large">
+                <div className="empty-icon">👤</div>
+                <h3>No User Selected</h3>
+                <p>Select a user from the list on the left to view and edit their profile.</p>
+              </div>
+            )}
+          </div>
         </section>
       </section>
     </main>
