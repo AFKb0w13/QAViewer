@@ -509,6 +509,12 @@ textarea {
   overflow: hidden;
 }
 
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
 .admin-tab-section {
   flex: 1;
   min-height: 0;

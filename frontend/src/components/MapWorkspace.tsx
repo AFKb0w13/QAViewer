@@ -8,6 +8,7 @@ import {
   MapContainer,
   Marker,
   Pane,
+  Popup,
   TileLayer,
   useMap,
   useMapEvents,
@@ -179,6 +180,7 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
   const [selectedDetail, setSelectedDetail] = useState<QuestionAreaDetail | null>(null);
   const [selectedParcelId, setSelectedParcelId] = useState<number | null>(null);
   const [selectedParcelDetail, setSelectedParcelDetail] = useState<ParcelFeature | null>(null);
+  const [popupInfo, setPopupInfo] = useState<{ latlng: L.LatLng; properties: ParcelFeatureProperties } | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft>({
     status: "review",
     summary: "",
@@ -575,126 +577,127 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
 
       <section className="workspace-grid">
         <aside className="workspace-panel left-panel">
-          <section className="panel-section stats-section">
-            <div className="stat-card">
-              <div className="stat-content">
-                <span>Active Question Areas</span>
-                <strong>
-                  {busy.summary ? "..." : activeCount}
-                </strong>
-              </div>
-            </div>
-          </section>
-
-          <section className="panel-section">
-            <div className="section-heading">
-              <h2>Search</h2>
-              <span>{busy.questionAreas ? "Refreshing..." : `${questionAreas?.features.length ?? 0} visible`}</span>
-            </div>
-            <form
-              className="search-stack"
-              onSubmit={(event) => {
-                event.preventDefault();
-                setSearchFilter(searchInput.trim());
-              }}
-            >
-              <div className="filter-row">
-                <select value={searchField} onChange={(event) => setSearchField(event.target.value)}>
-                  <option value="all">Search all fields</option>
-                  <option value="parcelnumb">Parcel Number</option>
-                  <option value="county">County</option>
-                  <option value="qa_id">Question Area ID</option>
-                </select>
-                <button className="primary-button" type="submit">
-                  Search map
-                </button>
-              </div>
-              
-              <div className="search-input-row">
-                <input
-                  className="search-input"
-                  placeholder="Type search term..."
-                  value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
-                />
-                <button
-                  className="ghost-button clear-button"
-                  type="button"
-                  onClick={() => {
-                    setSearchInput("");
-                    setSearchFilter("");
-                    setSearchResults([]);
-                  }}
-                >
-                  Clear
-                </button>
-              </div>
-
-              {searchResults.length > 0 ? (
-                <div className="search-results">
-                  {searchResults.map((result) => (
-                    <button
-                      key={`${result.type}-${result.id}`}
-                      className="search-result"
-                      type="button"
-                      onClick={() => handleSearchSelection(result)}
-                    >
-                      <strong>{result.label}</strong>
-                      <span>{result.subtitle || result.type}</span>
-                    </button>
-                  ))}
+          <div className="panel-content">
+            <section className="panel-section stats-section">
+              <div className="stat-card">
+                <div className="stat-content">
+                  <span>Active Question Areas</span>
+                  <strong>
+                    {busy.summary ? "..." : activeCount}
+                  </strong>
                 </div>
-              ) : null}
-            </form>
-          </section>
+              </div>
+            </section>
 
-          <section className="panel-section">
-            <div className="section-heading">
-              <h2>Legend</h2>
-            </div>
-            <div className="legend-list">
-              {LEGEND_ITEMS.map((item) => {
-                const isToggleable = item.toggleable;
-                const isVisible = !isToggleable || layerVisibility[item.key as LayerKey];
-                return (
-                  <div key={item.key} className={`legend-item ${item.indented ? 'legend-item-indented' : ''}`}>
-                    <span className={`legend-swatch legend-swatch-${item.swatch}`} />
-                    <span className="legend-label">{item.label}</span>
-                    {isToggleable ? (
+            <section className="panel-section">
+              <div className="section-heading">
+                <h2>Search</h2>
+                <span>{busy.questionAreas ? "Refreshing..." : `${questionAreas?.features.length ?? 0} visible`}</span>
+              </div>
+              <form
+                className="search-stack"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  setSearchFilter(searchInput.trim());
+                }}
+              >
+                <div className="filter-row">
+                  <select value={searchField} onChange={(event) => setSearchField(event.target.value)}>
+                    <option value="all">Search all fields</option>
+                    <option value="parcelnumb">Parcel Number</option>
+                    <option value="county">County</option>
+                    <option value="qa_id">Question Area ID</option>
+                  </select>
+                  <button className="primary-button" type="submit">
+                    Search map
+                  </button>
+                </div>
+                
+                <div className="search-input-row">
+                  <input
+                    className="search-input"
+                    placeholder="Type search term..."
+                    value={searchInput}
+                    onChange={(event) => setSearchInput(event.target.value)}
+                  />
+                  <button
+                    className="ghost-button clear-button"
+                    type="button"
+                    onClick={() => {
+                      setSearchInput("");
+                      setSearchFilter("");
+                      setSearchResults([]);
+                    }}
+                  >
+                    Clear
+                  </button>
+                </div>
+
+                {searchResults.length > 0 ? (
+                  <div className="search-results">
+                    {searchResults.map((result) => (
                       <button
-                        className="legend-eye"
+                        key={`${result.type}-${result.id}`}
+                        className="search-result"
                         type="button"
-                        title={isVisible ? "Hide layer" : "Show layer"}
-                        onClick={() =>
-                          setLayerVisibility((current) => ({
-                            ...current,
-                            [item.key]: !current[item.key as LayerKey],
-                          }))
-                        }
+                        onClick={() => handleSearchSelection(result)}
                       >
-                        {isVisible ? (
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                            <circle cx="12" cy="12" r="3" />
-                          </svg>
-                        ) : (
-                          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-                            <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-                            <line x1="1" y1="1" x2="23" y2="23" />
-                            <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
-                          </svg>
-                        )}
+                        <strong>{result.label}</strong>
+                        <span>{result.subtitle || result.type}</span>
                       </button>
-                    ) : (
-                      <span className="legend-eye-spacer" />
-                    )}
+                    ))}
                   </div>
-                );
-              })}
-            </div>
-          </section>
+                ) : null}
+              </form>
+            </section>
 
+            <section className="panel-section">
+              <div className="section-heading">
+                <h2>Legend</h2>
+              </div>
+              <div className="legend-list">
+                {LEGEND_ITEMS.map((item) => {
+                  const isToggleable = item.toggleable;
+                  const isVisible = !isToggleable || layerVisibility[item.key as LayerKey];
+                  return (
+                    <div key={item.key} className={`legend-item ${item.indented ? 'legend-item-indented' : ''}`}>
+                      <span className={`legend-swatch legend-swatch-${item.swatch}`} />
+                      <span className="legend-label">{item.label}</span>
+                      {isToggleable ? (
+                        <button
+                          className="legend-eye"
+                          type="button"
+                          title={isVisible ? "Hide layer" : "Show layer"}
+                          onClick={() =>
+                            setLayerVisibility((current) => ({
+                              ...current,
+                              [item.key]: !current[item.key as LayerKey],
+                            }))
+                          }
+                        >
+                          {isVisible ? (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                              <circle cx="12" cy="12" r="3" />
+                            </svg>
+                          ) : (
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+                              <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+                              <line x1="1" y1="1" x2="23" y2="23" />
+                              <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24" />
+                            </svg>
+                          )}
+                        </button>
+                      ) : (
+                        <span className="legend-eye-spacer" />
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
         </aside>
 
         <section className="map-panel">
@@ -730,13 +733,32 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
                     primaryParcelStyle(feature as ParcelFeature | undefined, selectedParcelId)
                   }
                   onEachFeature={(feature, layer) => {
-                    layer.on("click", () => {
-                      selectParcel(Number((feature as ParcelFeature).properties?.id ?? 0) || null);
+                    layer.on("click", (e) => {
+                      const properties = (feature as ParcelFeature).properties;
+                      selectParcel(Number(properties?.id ?? 0) || null);
+                      setPopupInfo({
+                        latlng: e.latlng,
+                        properties: properties,
+                      });
                     });
                   }}
                 />
               ) : null}
             </Pane>
+
+            {popupInfo ? (
+              <Popup
+                position={popupInfo.latlng}
+                onClose={() => setPopupInfo(null)}
+                closeButton={true}
+              >
+                <div className="parcel-popup">
+                  <strong>{popupInfo.properties.parcelnumb ?? "Parcel record"}</strong>
+                  <p>{popupInfo.properties.RegridOwner ?? "Unknown owner"}</p>
+                  <small>{popupInfo.properties.County}, {popupInfo.properties.State}</small>
+                </div>
+              </Popup>
+            ) : null}
 
             <Pane name="question-areas" style={{ zIndex: 430 }}>
               {questionAreas ? (
@@ -770,273 +792,275 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
         </section>
 
         <aside className="workspace-panel right-panel">
-          {busy.detail || busy.parcel ? <p className="empty-state">Loading selection details...</p> : null}
-          {!busy.detail && !busy.parcel && !selectedDetail && !selectedParcelDetail ? (
-            <p className="empty-state">
-              Select a question area or parcel from the map or the result list to open its details.
-            </p>
-          ) : null}
+          <div className="panel-content">
+            {busy.detail || busy.parcel ? <p className="empty-state">Loading selection details...</p> : null}
+            {!busy.detail && !busy.parcel && !selectedDetail && !selectedParcelDetail ? (
+              <p className="empty-state">
+                Select a question area or parcel from the map or the result list to open its details.
+              </p>
+            ) : null}
 
-          {selectedDetail ? (
-            <>
-              <section className="panel-section">
-                <div className="section-heading">
-                  <h2>{selectedDetail.title}</h2>
-                  <span>{selectedDetail.code}</span>
-                </div>
-                <div className="badge-row">
-                  <span className={`badge severity-${selectedDetail.severity}`}>{selectedDetail.severity}</span>
-                  <span className="badge neutral">{selectedDetail.status}</span>
-                  <span className="badge neutral">{selectedDetail.sourceGroup}</span>
-                </div>
-                <dl className="detail-grid">
-                  <DetailItem label="Parcel #">{selectedDetail.primaryParcelNumber ?? "None"}</DetailItem>
-                  <DetailItem label="Parcel Code">{selectedDetail.primaryParcelCode ?? "None"}</DetailItem>
-                  <DetailItem label="Owner">{selectedDetail.primaryOwnerName ?? "Unknown"}</DetailItem>
-                  <DetailItem label="County">{selectedDetail.county ?? "Unknown"}</DetailItem>
-                  <DetailItem label="State">{selectedDetail.state ?? "Unknown"}</DetailItem>
-                  <DetailItem label="Property">{selectedDetail.propertyName ?? "None"}</DetailItem>
-                </dl>
-                {selectedDetail.description ? (
-                  <div className="qa-reason">
-                    <dt>QA Reason (Spatial Overlay Notes)</dt>
-                    <dd>{selectedDetail.description}</dd>
+            {selectedDetail ? (
+              <>
+                <section className="panel-section">
+                  <div className="section-heading">
+                    <h2>{selectedDetail.title}</h2>
+                    <span>{selectedDetail.code}</span>
                   </div>
-                ) : null}
-              </section>
+                  <div className="badge-row">
+                    <span className={`badge severity-${selectedDetail.severity}`}>{selectedDetail.severity}</span>
+                    <span className="badge neutral">{selectedDetail.status}</span>
+                    <span className="badge neutral">{selectedDetail.sourceGroup}</span>
+                  </div>
+                  <dl className="detail-grid">
+                    <DetailItem label="Parcel #">{selectedDetail.primaryParcelNumber ?? "None"}</DetailItem>
+                    <DetailItem label="Parcel Code">{selectedDetail.primaryParcelCode ?? "None"}</DetailItem>
+                    <DetailItem label="Owner">{selectedDetail.primaryOwnerName ?? "Unknown"}</DetailItem>
+                    <DetailItem label="County">{selectedDetail.county ?? "Unknown"}</DetailItem>
+                    <DetailItem label="State">{selectedDetail.state ?? "Unknown"}</DetailItem>
+                    <DetailItem label="Property">{selectedDetail.propertyName ?? "None"}</DetailItem>
+                  </dl>
+                  {selectedDetail.description ? (
+                    <div className="qa-reason">
+                      <dt>QA Reason (Spatial Overlay Notes)</dt>
+                      <dd>{selectedDetail.description}</dd>
+                    </div>
+                  ) : null}
+                </section>
 
-              <section className="panel-section">
-                <div className="section-heading">
-                  <h2>Review controls</h2>
-                  <span>Editable</span>
-                </div>
-                <div className="form-stack">
-                  <label>
-                    Status
-                    <select
-                      value={editDraft.status}
-                      onChange={(event) =>
-                        setEditDraft((current) => ({ ...current, status: event.target.value }))
-                      }
-                    >
-                      {STATUS_OPTIONS.map((status) => (
-                        <option key={status} value={status}>
-                          {status}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label>
-                    Assigned user
-                    <input
-                      value={editDraft.assignedReviewer}
-                      onChange={(event) =>
-                        setEditDraft((current) => ({
-                          ...current,
-                          assignedReviewer: event.target.value,
-                        }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Summary
-                    <textarea
-                      rows={3}
-                      value={editDraft.summary}
-                      onChange={(event) =>
-                        setEditDraft((current) => ({ ...current, summary: event.target.value }))
-                      }
-                    />
-                  </label>
-                  <label>
-                    Notes
-                    <textarea
-                      rows={4}
-                      value={editDraft.description}
-                      onChange={(event) =>
-                        setEditDraft((current) => ({ ...current, description: event.target.value }))
-                      }
-                    />
-                  </label>
-                  <button className="primary-button" disabled={busy.saving} onClick={handleSaveDetail} type="button">
-                    {busy.saving ? "Saving..." : "Save review state"}
-                  </button>
-                </div>
-              </section>
-
-              <section className="panel-section">
-                <div className="section-heading">
-                  <h2>Metrics</h2>
-                  <span>GIS-derived</span>
-                </div>
-                <dl className="detail-grid">
-                  {Object.entries(selectedDetail.metrics).map(([key, value]) => (
-                    <DetailItem key={key} label={humanize(key)}>
-                      {formatMetric(value)}
-                    </DetailItem>
-                  ))}
-                </dl>
-              </section>
-
-              <section className="panel-section">
-                <div className="section-heading">
-                  <h2>Related parcels</h2>
-                  <span>{selectedDetail.relatedParcels.length} linked</span>
-                </div>
-                <div className="parcel-list">
-                  {selectedDetail.relatedParcels.map((parcel) => (
-                    <article key={`${parcel.parcelNumber}-${parcel.source}`} className="related-card">
-                      <strong>{parcel.parcelCode ?? parcel.parcelNumber ?? "Parcel record"}</strong>
-                      <span>{parcel.ownerName ?? "Unknown owner"}</span>
-                      <small>
-                        {[parcel.county, parcel.state, parcel.source].filter(Boolean).join(" | ")}
-                      </small>
-                    </article>
-                  ))}
-                </div>
-              </section>
-
-              <section className="panel-section">
-                <div className="section-heading">
-                  <h2>Discussion</h2>
-                  <span>{selectedDetail.comments.length} comments</span>
-                </div>
-                <div className="comment-list">
-                  {selectedDetail.comments.map((comment) => (
-                    <article key={comment.id} className="comment-card">
-                      <div>
-                        <strong>{comment.authorName}</strong>
-                        <small>{comment.authorRole}</small>
-                      </div>
-                      <p>{comment.body}</p>
-                      <span>{new Date(comment.createdAt).toLocaleString()}</span>
-                    </article>
-                  ))}
-                </div>
-                <form className="form-stack" onSubmit={handleCommentSubmit}>
-                  <label>
-                    Add comment
-                    <textarea
-                      rows={3}
-                      value={commentDraft}
-                      onChange={(event) => setCommentDraft(event.target.value)}
-                    />
-                  </label>
-                  <button className="primary-button" disabled={busy.commenting} type="submit">
-                    {busy.commenting ? "Posting..." : "Post comment"}
-                  </button>
-                </form>
-              </section>
-
-              <section className="panel-section">
-                <div className="section-heading">
-                  <h2>Documents</h2>
-                  <span>{selectedDetail.documents.length} attached</span>
-                </div>
-                <div className="document-list">
-                  {selectedDetail.documents.map((document) => (
-                    <article key={document.id} className="document-card">
-                      <div>
-                        <strong>{document.originalName}</strong>
-                        <small>{formatFileSize(document.sizeBytes)}</small>
-                      </div>
-                      <button
-                        className="ghost-button"
-                        onClick={() => handleDownloadDocument(document)}
-                        type="button"
+                <section className="panel-section">
+                  <div className="section-heading">
+                    <h2>Review controls</h2>
+                    <span>Editable</span>
+                  </div>
+                  <div className="form-stack">
+                    <label>
+                      Status
+                      <select
+                        value={editDraft.status}
+                        onChange={(event) =>
+                          setEditDraft((current) => ({ ...current, status: event.target.value }))
+                        }
                       >
-                        Download
-                      </button>
-                    </article>
-                  ))}
-                </div>
-                <div className="upload-row">
-                  <input
-                    onChange={(event: ChangeEvent<HTMLInputElement>) =>
-                      setSelectedFile(event.target.files?.[0] ?? null)
-                    }
-                    type="file"
-                  />
-                  <button
-                    className="primary-button"
-                    disabled={!selectedFile || busy.uploading}
-                    onClick={handleUploadDocument}
-                    type="button"
-                  >
-                    {busy.uploading ? "Uploading..." : "Upload"}
-                  </button>
-                </div>
-              </section>
-            </>
-          ) : null}
-
-          {!selectedDetail && selectedParcelDetail ? (
-            <>
-              <section className="panel-section">
-                <div className="section-heading">
-                  <h2>{selectedParcelDetail.properties.parcelnumb ?? "Parcel record"}</h2>
-                  <span>Parcel</span>
-                </div>
-                <div className="badge-row">
-                  <span
-                    className={`badge ${
-                      isParcelActive(selectedParcelDetail.properties.QA_Status)
-                        ? "severity-medium"
-                        : "neutral"
-                    }`}
-                  >
-                    {isParcelActive(selectedParcelDetail.properties.QA_Status) ? "Active" : "Not active"}
-                  </span>
-                </div>
-                <dl className="detail-grid">
-                  <DetailItem label="Parcel Code">
-                    {selectedParcelDetail.properties.PTVParcel ?? "None"}
-                  </DetailItem>
-                  <DetailItem label="QA ID">
-                    {selectedParcelDetail.properties.questionAreaCode ?? "None"}
-                  </DetailItem>
-                  <DetailItem label="Owner">
-                    {selectedParcelDetail.properties.RegridOwner ?? "Unknown"}
-                  </DetailItem>
-                  <DetailItem label="County">
-                    {selectedParcelDetail.properties.County ?? "Unknown"}
-                  </DetailItem>
-                  <DetailItem label="State">
-                    {selectedParcelDetail.properties.State ?? "Unknown"}
-                  </DetailItem>
-                  <DetailItem label="Property">
-                    {selectedParcelDetail.properties.PropertyName ?? "None"}
-                  </DetailItem>
-                  <DetailItem label="Analysis">
-                    {selectedParcelDetail.properties.AnalysisName ?? "None"}
-                  </DetailItem>
-                  <DetailItem label="Tract">
-                    {selectedParcelDetail.properties.TractName ?? "None"}
-                  </DetailItem>
-                  <DetailItem label="GIS Acres">
-                    {formatMetric(selectedParcelDetail.properties.GIS_Acres)}
-                  </DetailItem>
-                </dl>
-                {selectedParcelDetail.properties.SpatialOverlayNotes ? (
-                  <div className="qa-reason">
-                    <dt>Parcel notes</dt>
-                    <dd>{selectedParcelDetail.properties.SpatialOverlayNotes}</dd>
+                        {STATUS_OPTIONS.map((status) => (
+                          <option key={status} value={status}>
+                            {status}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Assigned user
+                      <input
+                        value={editDraft.assignedReviewer}
+                        onChange={(event) =>
+                          setEditDraft((current) => ({
+                            ...current,
+                            assignedReviewer: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Summary
+                      <textarea
+                        rows={3}
+                        value={editDraft.summary}
+                        onChange={(event) =>
+                          setEditDraft((current) => ({ ...current, summary: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <label>
+                      Notes
+                      <textarea
+                        rows={4}
+                        value={editDraft.description}
+                        onChange={(event) =>
+                          setEditDraft((current) => ({ ...current, description: event.target.value }))
+                        }
+                      />
+                    </label>
+                    <button className="primary-button" disabled={busy.saving} onClick={handleSaveDetail} type="button">
+                      {busy.saving ? "Saving..." : "Save review state"}
+                    </button>
                   </div>
-                ) : null}
-              </section>
+                </section>
 
-              <section className="panel-section">
-                <div className="section-heading">
-                  <h2>Parcel status</h2>
-                  <span>Read only</span>
-                </div>
-                <p className="panel-note">
-                  Parcels without question areas can be inspected here, but review controls only
-                  appear when a question area record exists.
-                </p>
-              </section>
-            </>
-          ) : null}
+                <section className="panel-section">
+                  <div className="section-heading">
+                    <h2>Metrics</h2>
+                    <span>GIS-derived</span>
+                  </div>
+                  <dl className="detail-grid">
+                    {Object.entries(selectedDetail.metrics).map(([key, value]) => (
+                      <DetailItem key={key} label={humanize(key)}>
+                        {formatMetric(value)}
+                      </DetailItem>
+                    ))}
+                  </dl>
+                </section>
+
+                <section className="panel-section">
+                  <div className="section-heading">
+                    <h2>Related parcels</h2>
+                    <span>{selectedDetail.relatedParcels.length} linked</span>
+                  </div>
+                  <div className="parcel-list">
+                    {selectedDetail.relatedParcels.map((parcel) => (
+                      <article key={`${parcel.parcelNumber}-${parcel.source}`} className="related-card">
+                        <strong>{parcel.parcelCode ?? parcel.parcelNumber ?? "Parcel record"}</strong>
+                        <span>{parcel.ownerName ?? "Unknown owner"}</span>
+                        <small>
+                          {[parcel.county, parcel.state, parcel.source].filter(Boolean).join(" | ")}
+                        </small>
+                      </article>
+                    ))}
+                  </div>
+                </section>
+
+                <section className="panel-section">
+                  <div className="section-heading">
+                    <h2>Discussion</h2>
+                    <span>{selectedDetail.comments.length} comments</span>
+                  </div>
+                  <div className="comment-list">
+                    {selectedDetail.comments.map((comment) => (
+                      <article key={comment.id} className="comment-card">
+                        <div>
+                          <strong>{comment.authorName}</strong>
+                          <small>{comment.authorRole}</small>
+                        </div>
+                        <p>{comment.body}</p>
+                        <span>{new Date(comment.createdAt).toLocaleString()}</span>
+                      </article>
+                    ))}
+                  </div>
+                  <form className="form-stack" onSubmit={handleCommentSubmit}>
+                    <label>
+                      Add comment
+                      <textarea
+                        rows={3}
+                        value={commentDraft}
+                        onChange={(event) => setCommentDraft(event.target.value)}
+                      />
+                    </label>
+                    <button className="primary-button" disabled={busy.commenting} type="submit">
+                      {busy.commenting ? "Posting..." : "Post comment"}
+                    </button>
+                  </form>
+                </section>
+
+                <section className="panel-section">
+                  <div className="section-heading">
+                    <h2>Documents</h2>
+                    <span>{selectedDetail.documents.length} attached</span>
+                  </div>
+                  <div className="document-list">
+                    {selectedDetail.documents.map((document) => (
+                      <article key={document.id} className="document-card">
+                        <div>
+                          <strong>{document.originalName}</strong>
+                          <small>{formatFileSize(document.sizeBytes)}</small>
+                        </div>
+                        <button
+                          className="ghost-button"
+                          onClick={() => handleDownloadDocument(document)}
+                          type="button"
+                        >
+                          Download
+                        </button>
+                      </article>
+                    ))}
+                  </div>
+                  <div className="upload-row">
+                    <input
+                      onChange={(event: ChangeEvent<HTMLInputElement>) =>
+                        setSelectedFile(event.target.files?.[0] ?? null)
+                      }
+                      type="file"
+                    />
+                    <button
+                      className="primary-button"
+                      disabled={!selectedFile || busy.uploading}
+                      onClick={handleUploadDocument}
+                      type="button"
+                    >
+                      {busy.uploading ? "Uploading..." : "Upload"}
+                    </button>
+                  </div>
+                </section>
+              </>
+            ) : null}
+
+            {!selectedDetail && selectedParcelDetail ? (
+              <>
+                <section className="panel-section">
+                  <div className="section-heading">
+                    <h2>{selectedParcelDetail.properties.parcelnumb ?? "Parcel record"}</h2>
+                    <span>Parcel</span>
+                  </div>
+                  <div className="badge-row">
+                    <span
+                      className={`badge ${
+                        isParcelActive(selectedParcelDetail.properties.QA_Status)
+                          ? "severity-medium"
+                          : "neutral"
+                      }`}
+                    >
+                      {isParcelActive(selectedParcelDetail.properties.QA_Status) ? "Active" : "Not active"}
+                    </span>
+                  </div>
+                  <dl className="detail-grid">
+                    <DetailItem label="Parcel Code">
+                      {selectedParcelDetail.properties.PTVParcel ?? "None"}
+                    </DetailItem>
+                    <DetailItem label="QA ID">
+                      {selectedParcelDetail.properties.questionAreaCode ?? "None"}
+                    </DetailItem>
+                    <DetailItem label="Owner">
+                      {selectedParcelDetail.properties.RegridOwner ?? "Unknown"}
+                    </DetailItem>
+                    <DetailItem label="County">
+                      {selectedParcelDetail.properties.County ?? "Unknown"}
+                    </DetailItem>
+                    <DetailItem label="State">
+                      {selectedParcelDetail.properties.State ?? "Unknown"}
+                    </DetailItem>
+                    <DetailItem label="Property">
+                      {selectedParcelDetail.properties.PropertyName ?? "None"}
+                    </DetailItem>
+                    <DetailItem label="Analysis">
+                      {selectedParcelDetail.properties.AnalysisName ?? "None"}
+                    </DetailItem>
+                    <DetailItem label="Tract">
+                      {selectedParcelDetail.properties.TractName ?? "None"}
+                    </DetailItem>
+                    <DetailItem label="GIS Acres">
+                      {formatMetric(selectedParcelDetail.properties.GIS_Acres)}
+                    </DetailItem>
+                  </dl>
+                  {selectedParcelDetail.properties.SpatialOverlayNotes ? (
+                    <div className="qa-reason">
+                      <dt>Parcel notes</dt>
+                      <dd>{selectedParcelDetail.properties.SpatialOverlayNotes}</dd>
+                    </div>
+                  ) : null}
+                </section>
+
+                <section className="panel-section">
+                  <div className="section-heading">
+                    <h2>Parcel status</h2>
+                    <span>Read only</span>
+                  </div>
+                  <p className="panel-note">
+                    Parcels without question areas can be inspected here, but review controls only
+                    appear when a question area record exists.
+                  </p>
+                </section>
+              </>
+            ) : null}
+          </div>
         </aside>
       </section>
     </main>
