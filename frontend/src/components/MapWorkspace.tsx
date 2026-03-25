@@ -198,6 +198,8 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
   const [selectedDetail, setSelectedDetail] = useState<QuestionAreaDetail | null>(null);
   const [selectedParcelId, setSelectedParcelId] = useState<number | null>(null);
   const [selectedParcelDetail, setSelectedParcelDetail] = useState<ParcelDetail | null>(null);
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+  const [rightPanelCollapsed, setRightPanelCollapsed] = useState(false);
   const [editDraft, setEditDraft] = useState<EditDraft>({
     status: "active",
     summary: "",
@@ -705,8 +707,20 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
         </div>
       </header>
 
-      <section className="workspace-grid">
-        <aside className="workspace-panel left-panel">
+      <section
+        className={`workspace-grid ${leftPanelCollapsed ? "left-collapsed" : ""} ${
+          rightPanelCollapsed ? "right-collapsed" : ""
+        } ${leftPanelCollapsed && rightPanelCollapsed ? "both-collapsed" : ""}`}
+      >
+        <aside className={`workspace-panel left-panel ${leftPanelCollapsed ? "collapsed" : ""}`}>
+          <button
+            className="collapse-toggle"
+            onClick={() => setLeftPanelCollapsed(!leftPanelCollapsed)}
+            title={leftPanelCollapsed ? "Expand panel" : "Collapse panel"}
+            type="button"
+          >
+            {leftPanelCollapsed ? "→" : "←"}
+          </button>
           <div className="panel-content">
             <section className="panel-section stats-section">
               <div className="stat-card">
@@ -763,7 +777,7 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
                 </div>
 
                 {searchResults.length > 0 ? (
-                  <div className="search-results">
+                  <div className="search-results glass">
                     {searchResults.map((result) => (
                       <button
                         key={`${result.type}-${result.id}`}
@@ -772,7 +786,7 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
                         onClick={() => handleSearchSelection(result)}
                       >
                         <strong>{result.label}</strong>
-                        <span>{result.subtitle || result.type}</span>
+                        <span className="mono">{result.subtitle || result.type}</span>
                       </button>
                     ))}
                   </div>
@@ -831,6 +845,7 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
 
         <section className="map-panel">
           <MapContainer center={[39.5, -95]} zoom={4} className="leaflet-shell" zoomControl={false}>
+            {/* ... TileLayer, ViewportWatcher, etc ... */}
             <TileLayer
               attribution='&copy; OpenStreetMap contributors &copy; CARTO'
               url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png"
@@ -900,9 +915,17 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
           </MapContainer>
         </section>
 
-        <aside className="workspace-panel right-panel">
+        <aside className={`workspace-panel right-panel ${rightPanelCollapsed ? "collapsed" : ""}`}>
+          <button
+            className="collapse-toggle"
+            onClick={() => setRightPanelCollapsed(!rightPanelCollapsed)}
+            title={rightPanelCollapsed ? "Expand panel" : "Collapse panel"}
+            type="button"
+          >
+            {rightPanelCollapsed ? "←" : "→"}
+          </button>
           <div className="panel-content">
-            {busy.detail || busy.parcel ? <p className="empty-state">Loading selection details...</p> : null}
+            {busy.detail || busy.parcel ? <SkeletonDetail /> : null}
             {!busy.detail && !busy.parcel && !selectedDetail && !selectedParcelDetail ? (
               <p className="empty-state">
                 Select a question area or parcel from the map or the result list to open its details.
@@ -912,7 +935,7 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
             {selectedDetail ? (
               <>
                 <section className="panel-section">
-                  <div className="section-heading">
+                  <div className="section-heading primary-heading">
                     <h2>{selectedDetail.title}</h2>
                     <span>{selectedDetail.code}</span>
                   </div>
@@ -928,8 +951,8 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
                     </span>
                   </div>
                   <dl className="detail-grid">
-                    <DetailItem label="Parcel #">{selectedDetail.primaryParcelNumber ?? "None"}</DetailItem>
-                    <DetailItem label="Parcel Code">{selectedDetail.primaryParcelCode ?? "None"}</DetailItem>
+                    <DetailItem label="Parcel #" mono>{selectedDetail.primaryParcelNumber ?? "None"}</DetailItem>
+                    <DetailItem label="Parcel Code" mono>{selectedDetail.primaryParcelCode ?? "None"}</DetailItem>
                     <DetailItem label="Owner">{selectedDetail.primaryOwnerName ?? "Unknown"}</DetailItem>
                     <DetailItem label="County">{selectedDetail.county ?? "Unknown"}</DetailItem>
                     <DetailItem label="State">{selectedDetail.state ?? "Unknown"}</DetailItem>
@@ -1078,8 +1101,12 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
             {!selectedDetail && selectedParcelDetail ? (
               <>
                 <section className="panel-section">
-                  <div className="section-heading">
-                    <h2>{selectedParcelDetail.properties.parcelnumb ?? "Parcel record"}</h2>
+                  <div className="section-heading primary-heading">
+                    <h2>
+                      {selectedParcelDetail.properties.parcelnumb
+                        ? `Parcel #${selectedParcelDetail.properties.parcelnumb}`
+                        : "Parcel record"}
+                    </h2>
                   </div>
                   {isParcelActive(selectedParcelDetail.properties.QA_Status) ? (
                     <div className="badge-row">
@@ -1097,10 +1124,10 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
                     </div>
                   ) : null}
                   <dl className="detail-grid">
-                    <DetailItem label="Parcel Code">
+                    <DetailItem label="Parcel Code" mono>
                       {selectedParcelDetail.properties.PTVParcel ?? "None"}
                     </DetailItem>
-                    <DetailItem label="QA ID">
+                    <DetailItem label="QA ID" mono>
                       {selectedParcelDetail.properties.questionAreaCode ?? "None"}
                     </DetailItem>
                     <DetailItem label="Owner">
@@ -1118,7 +1145,7 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
                     <DetailItem label="Tract">
                       {selectedParcelDetail.properties.TractName ?? "None"}
                     </DetailItem>
-                    <DetailItem label="GIS Acres">
+                    <DetailItem label="GIS Acres" mono>
                       {formatMetric(selectedParcelDetail.properties.GIS_Acres)}
                     </DetailItem>
                   </dl>
@@ -1351,12 +1378,36 @@ function primaryParcelStyle(
   };
 }
 
-function DetailItem({ label, children }: { label: string; children: string }) {
+function DetailItem({
+  label,
+  children,
+  mono,
+}: {
+  label: string;
+  children: string;
+  mono?: boolean;
+}) {
   return (
     <div>
       <dt>{label}</dt>
-      <dd>{children}</dd>
+      <dd className={mono ? "mono" : ""}>{children}</dd>
     </div>
+  );
+}
+
+function SkeletonDetail() {
+  return (
+    <section className="panel-section">
+      <div className="skeleton skeleton-heading" />
+      <div className="detail-grid">
+        {[...Array(6)].map((_, i) => (
+          <div key={i}>
+            <div className="skeleton" style={{ height: "0.75rem", width: "40%", marginBottom: "0.5rem" }} />
+            <div className="skeleton" style={{ height: "1.25rem", width: "80%" }} />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
@@ -1364,7 +1415,7 @@ function createQAMarker(selectedCode: string | null, feature: QuestionAreaFeatur
   const isSelected = feature?.properties?.code === selectedCode;
   return L.divIcon({
     className: "qa-marker-icon",
-    html: `<div class="qa-marker-inner ${isSelected ? 'selected' : ''}">?</div>`,
+    html: `<div class="qa-marker-inner ${isSelected ? "selected pulse" : ""}">?</div>`,
     iconSize: [24, 24],
     iconAnchor: [12, 12],
   });
