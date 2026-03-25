@@ -163,7 +163,7 @@ type MapWorkspaceProps = {
   onOpenAdmin?: () => void;
 };
 
-const STATUS_OPTIONS = ["review", "active", "resolved", "hold"];
+const STATUS_OPTIONS = ["active", "resolved", "hold"];
 
 const initialLayers: Record<LayerKey, boolean> = {
   primary_parcels: true,
@@ -199,14 +199,14 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
   const [selectedParcelId, setSelectedParcelId] = useState<number | null>(null);
   const [selectedParcelDetail, setSelectedParcelDetail] = useState<ParcelDetail | null>(null);
   const [editDraft, setEditDraft] = useState<EditDraft>({
-    status: "review",
+    status: "active",
     summary: "",
     description: "",
     assignedReviewer: "",
   });
   const [commentDraft, setCommentDraft] = useState("");
   const [parcelCommentDraft, setParcelCommentDraft] = useState("");
-  const [parcelStatusDraft, setParcelStatusDraft] = useState("review");
+  const [parcelStatusDraft, setParcelStatusDraft] = useState("active");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [busy, setBusy] = useState({
@@ -900,7 +900,7 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
                           : "neutral"
                       }`}
                     >
-                      {selectedDetail.status}
+                      {selectedDetail.status.toLowerCase() === "review" ? "Active" : selectedDetail.status}
                     </span>
                   </div>
                   <dl className="detail-grid">
@@ -921,7 +921,7 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
 
                 <section className="panel-section">
                   <div className="section-heading">
-                    <h2>Review controls</h2>
+                    <h2>Workflow controls</h2>
                     <span>Editable</span>
                   </div>
                   <div className="form-stack">
@@ -1065,7 +1065,9 @@ export function MapWorkspace({ session, onLogout, onOpenAdmin }: MapWorkspacePro
                           : "neutral"
                       }`}
                     >
-                      {humanize(selectedParcelDetail.properties.reviewStatus ?? "review")}
+                      {selectedParcelDetail.properties.reviewStatus?.toLowerCase() === "review"
+                        ? "Active"
+                        : humanize(selectedParcelDetail.properties.reviewStatus ?? "active")}
                     </span>
                   </div>
                   <dl className="detail-grid">
@@ -1360,5 +1362,5 @@ function isWorkflowActive(value: string | null | undefined) {
 }
 
 function deriveInitialParcelStatus(value: string | null | undefined) {
-  return isParcelActive(value) ? "active" : "review";
+  return isParcelActive(value) ? "active" : "hold";
 }
